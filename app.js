@@ -32,6 +32,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let baseLayer;
   let currentLat = null;
   let currentLon = null;
+  // The forecast location's timezone (from the NWS points response, e.g.
+  // "America/Chicago"). Every time on the page renders in THIS zone, never
+  // the viewing device's, so a screen set to UTC still shows local weather
+  // time. Set in fetchAllWeatherData once the points data lands.
+  let locationTimeZone = null;
   let refreshTimerId = null;
   let clockTimerId = null;
 
@@ -112,7 +117,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!dateString) return '';
     const date = new Date(dateString);
     if (isNaN(date)) return '';
-    return `${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+    // Render in the forecast location's timezone (see locationTimeZone), not
+    // the viewing device's. Falls back to the device timezone only if the
+    // points data has not loaded yet or the zone name is unrecognized.
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: locationTimeZone || undefined,
+        hourCycle: 'h23', hour: '2-digit', minute: '2-digit'
+      }).formatToParts(date);
+      const hh = parts.find(p => p.type === 'hour').value;
+      const mm = parts.find(p => p.type === 'minute').value;
+      return `${hh}${mm}`;
+    } catch (e) {
+      return `${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+    }
   }
 
   // --- URL State Management ---
@@ -184,8 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       if (data.status === "OK") {
         // Output as strictly 24hr military time
-        const sunrise = new Date(data.results.sunrise).toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute:'2-digit'});
-        const sunset = new Date(data.results.sunset).toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute:'2-digit'});
+        const sunrise = new Date(data.results.sunrise).toLocaleTimeString('en-US', {timeZone: locationTimeZone || undefined, hour12: false, hour: '2-digit', minute:'2-digit'});
+        const sunset = new Date(data.results.sunset).toLocaleTimeString('en-US', {timeZone: locationTimeZone || undefined, hour12: false, hour: '2-digit', minute:'2-digit'});
         solarContainer.innerHTML = `☀ Rise: ${sunrise} | Set: ${sunset}`;
         solarContainer.classList.remove('hidden');
       }
@@ -304,13 +322,18 @@ document.addEventListener('DOMContentLoaded', () => {
           format: 'image/png', transparent: true, opacity: 0.85
       }).addTo(map);
 
-      // Invoke Solar Parallel Execution
-      fetchSunriseSunset(lat, lon);
-
       const pointsRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
       if (!pointsRes.ok) throw new Error("Weather data not available for this location.");
       const pointsData = await pointsRes.json();
-      
+
+      // Pin the page timezone to the forecast location before anything
+      // renders a time (solar strip, microcast labels, alert times).
+      locationTimeZone = pointsData.properties.timeZone || null;
+
+      // Invoke Solar Parallel Execution (after the timezone is known, so
+      // sunrise and sunset render in the location's zone)
+      fetchSunriseSunset(lat, lon);
+
       startClocks(pointsData.properties.timeZone);
 
       const wfo = pointsData.properties.cwa;
