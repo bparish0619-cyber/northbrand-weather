@@ -48,6 +48,7 @@ Flat. No backdrop blur, no glass, no stacked shadows. Hairlines separate; the si
 Do:
 - Change theme through the :root variables and the few marked rules (title, panels, slider) only
 - Keep the risk banners calibrated (set 2026-10-28): they scan only the next 12 hours (RISK_WINDOW_HOURS in app.js), and Thunderstorm Risk needs substance, meaning the period text is stronger than "slight chance" or "isolated" wording, or its precipitation probability is at least 40 (THUNDER_POP_FLOOR). Official NWS alerts are never filtered. If the banners feel off again, retune those two numbers instead of rewriting the logic
+- Keep every displayed time pinned to the forecast location's timezone (the NWS points response, stored as locationTimeZone in app.js; set 2026-10-28): the microcast labels, alert times, and sunrise/sunset all render through it. The breakroom TV's clock is set to UTC, and device time must never leak into a label again
 - Keep both the regular and kiosk renders in mind: check the page with the AbleSign parameters after any theme touch (lat 32.4254, lon -99.8443, zoom 8, refresh 15, kiosk true)
 - Keep the footer lockup wording exact
 
