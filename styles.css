@@ -1,13 +1,19 @@
+/* Northbrand Weather theme: V1 "Ink and Amber", set 2026-10-28.
+   Tokens follow the Northbrand design DNA (~/workspace/northbrand-hub/DESIGN.md):
+   Ink #14161c, Paper text #f4f3ec, Gold #c9a227, Gold Bright #e8b33c,
+   and weather's local accent, amber #fbbf24. Layout is unchanged:
+   this page runs on a breakroom TV in kiosk mode, so theme only.
+   To retint the whole page, change the variables in :root below. */
 :root {
-  --bg-color: #0d1117;
-  --bg-gradient: radial-gradient(ellipse at top left, #1e1b4b 0%, #0f172a 45%, #020617 100%);
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --glass-bg: rgba(30, 41, 59, 0.6);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --accent: #38bdf8;
-  --accent-hover: #0ea5e9;
+  --bg-color: #14161c;
+  --bg-gradient: linear-gradient(#14161c, #14161c);
+  --text-main: #f4f3ec;
+  --text-muted: #a7aabc;
+  --glass-bg: #1b1e27;
+  --glass-border: #2c303e;
+  --glass-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  --accent: #fbbf24;
+  --accent-hover: #e8b33c;
   --danger: #ef4444;
   --danger-bg: rgba(239, 68, 68, 0.15);
   --danger-border: rgba(239, 68, 68, 0.5);
@@ -35,10 +41,8 @@ body {
 /* Glassmorphism Utilities */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: var(--glass-shadow);
 }
 
@@ -94,12 +98,11 @@ body {
 }
 
 .top-nav h1 {
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.6rem;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #38bdf8, #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-main);
 }
 
 .nav-controls {
@@ -827,3 +830,7 @@ body.kiosk-mode .discussion-panel pre {
   line-height: 1.35 !important;
   overflow-y: auto !important;
 }
+
+/* V1 theme fix (2026-10-28): the radar opacity slider used the browser's
+   default blue; tint it with the page accent instead. */
+input[type="range"] { accent-color: var(--accent); }
