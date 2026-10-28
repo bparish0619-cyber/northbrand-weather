@@ -499,10 +499,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (dayP) { highTemp = lowTemp = dayP.temperature; }
       else if (nightP) { highTemp = lowTemp = nightP.temperature; }
       
-      if (highTemp >= 100 || lowTemp >= 100) hasExtremeHeat = true;
-      if (highTemp <= 32 || lowTemp <= 32) hasExtremeCold = true;
-      if (primary.shortForecast.toLowerCase().includes('snow')) hasSnowRisk = true;
-      if (primary.shortForecast.toLowerCase().includes('thunder')) hasLightningRisk = true;
+      // NOTE (2026-10-28): the risk flags (heat, cold, snow, lightning) are no
+      // longer set in this day loop. They are computed after the loop from the
+      // raw periods inside a short look-ahead window; see "Risk calibration"
+      // below. This loop only builds the 7-day cards now.
 
       const rainProb = dayP?.probabilityOfPrecipitation?.value || nightP?.probabilityOfPrecipitation?.value || 0;
       const windSpeed = primary.windSpeed;
@@ -551,6 +551,35 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
     }
     forecastGrid.innerHTML = html;
+
+    // --- Risk calibration (set 2026-10-28 at Brandon's request) ---
+    // The risk banners under the header (Heat Danger, Freeze Warning, Snow
+    // Expected, Thunderstorm Risk) only look RISK_WINDOW_HOURS ahead instead
+    // of scanning the whole 7-day outlook, so a marginal mention days out no
+    // longer pins a banner to the top of the page. Thunder also has to be
+    // more than a whisper: "slight chance" or "isolated" wording alone does
+    // not flag unless that period's precipitation probability reaches
+    // THUNDER_POP_FLOOR. To retune the banners, change these two numbers.
+    // Official NWS alerts (the alert banners and their hail, wind, and
+    // tornado risks) are NOT filtered here; they are in effect now by
+    // definition and always show.
+    const RISK_WINDOW_HOURS = 12;
+    const THUNDER_POP_FLOOR = 40;
+    const riskWindowEnd = Date.now() + RISK_WINDOW_HOURS * 3600 * 1000;
+    for (const p of periods) {
+      const starts = new Date(p.startTime).getTime();
+      const ends = new Date(p.endTime).getTime();
+      if (starts >= riskWindowEnd || ends <= Date.now()) continue; // outside the window
+      const text = (p.shortForecast || '').toLowerCase();
+      if (p.temperature >= 100) hasExtremeHeat = true;
+      if (p.temperature <= 32) hasExtremeCold = true;
+      if (text.includes('snow')) hasSnowRisk = true;
+      if (text.includes('thunder')) {
+        const pop = p.probabilityOfPrecipitation?.value ?? 0;
+        const weakWording = text.includes('slight chance') || text.includes('isolated');
+        if (pop >= THUNDER_POP_FLOOR || !weakWording) hasLightningRisk = true;
+      }
+    }
 
     // Compile Expansion Risk Blocks
     let allRisks = [...alertsRisks];
