@@ -1,4 +1,14 @@
-# Northbrand Weather ⚡
+# Northbrand Weather
+
+**Live:** [weather.northbrand.net](https://weather.northbrand.net) (Cloudflare Pages, project `northbrandweather`; also answers at northbrandweather.pages.dev)
+
+A Northbrand Collective page: a plain, quick weather board for Abilene and the surrounding country, styled to the shared design DNA (Gold Bright amber accent on the Northbrand shell; the DNA lives in the northbrand-hub repo).
+
+This repo is the archive of record. The live files are the static app in `~/workspace/cloudflare-sites/northbrandweather/`, published by direct upload to Cloudflare Pages. There is no refresh job: the page reads live weather data in the visitor's browser, so updating the site means editing the app files, redeploying, and committing the same files here.
+
+The original project notes follow, unedited.
+
+---
 
 **Northbrand Weather** is a professional-grade, high-performance web dashboard providing deep, proxy-less access into localized meteorological constraints via National Weather Service API pipelines. Designed from the ground up for power users, aviation enthusiasts, and meteorologists, the dashboard fuses rich mapping visuals with granular quantitative models native entirely to the client's web-browser.
 
