@@ -694,29 +694,73 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Translates NWS JSON observation payload to English
+  // Translates NWS JSON observation payload into label/value rows for the
+  // two-column data grid (Option A, 2026-10-28). This replaces the old
+  // hand-padded text lines, whose columns only lined up in a monospace font.
   function translateMETAR(props) {
-     if (!props) return "Observation payload missing.";
-     let translation = `Current Condition: ${props.textDescription || 'N/A'}\n`;
-     if (props.temperature?.value !== null) {
+     if (!props) return [];
+     const rows = [];
+     rows.push({label: 'Current Condition', value: props.textDescription || 'N/A'});
+     if (props.temperature?.value != null) {
          let f = Math.round(props.temperature.value * 1.8 + 32);
-         translation += `Temperature:       ${f}°F (${Math.round(props.temperature.value)}°C)\n`;
+         rows.push({label: 'Temperature', value: `${f}°F (${Math.round(props.temperature.value)}°C)`});
      }
-     if (props.dewpoint?.value !== null) {
+     if (props.dewpoint?.value != null) {
          let df = Math.round(props.dewpoint.value * 1.8 + 32);
-         translation += `Dewpoint:          ${df}°F\n`;
+         rows.push({label: 'Dewpoint', value: `${df}°F`});
      }
-     if (props.relativeHumidity?.value !== null) {
-         translation += `Humidity:          ${Math.round(props.relativeHumidity.value)}%\n`;
+     if (props.relativeHumidity?.value != null) {
+         rows.push({label: 'Humidity', value: `${Math.round(props.relativeHumidity.value)}%`});
      }
-     if (props.windDirection?.value !== null && props.windSpeed?.value !== null) {
+     if (props.windDirection?.value != null && props.windSpeed?.value != null) {
          let wT = Math.round(props.windSpeed.value * 0.539957); // kmh to kt
-         translation += `Wind Vectors:      ${props.windDirection.value}° at ${wT} knots\n`;
+         rows.push({label: 'Wind', value: `${props.windDirection.value}° at ${wT} knots`});
      }
-     if (props.visibility?.value !== null) {
+     if (props.visibility?.value != null) {
          let v = (props.visibility.value * 0.000621371).toFixed(1); // meters to miles
-         translation += `Visibility:        ${v} miles\n`;
+         rows.push({label: 'Visibility', value: `${v} miles`});
      }
-     return translation;
+     return rows;
+  }
+
+  // Turns the decoded TAF text into label/value rows for the same grid:
+  // each forecast segment (base, From groups, Temporary, probability) gets
+  // its time or kind as the label and its conditions as the value. The
+  // transmission header lines (000, FTUS.., TAFxx, TAF) are dropped, since
+  // the card title already says what the product is. Anything unrecognized
+  // is appended to the previous row, so no forecast text is ever lost; if
+  // nothing parses, the caller falls back to the plain decoded text.
+  function tafRows(translated) {
+     const clean = t => t.replace(/=\s*$/, '').replace(/\s+/g, ' ').trim();
+     const ordinal = d => { const s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(v - 20) % 10] || s[v] || s[0]); };
+     const rows = [];
+     let baseDay = null;
+     for (const seg of translated.split('\n\n').map(x => x.trim()).filter(Boolean)) {
+        if (/^\d{3}$/.test(seg) || /^FTUS/.test(seg) || /^TAF[A-Z]{2,4}$/.test(seg) || seg === 'TAF') continue;
+        let m = seg.match(/^([A-Z]{4})\s+\d{6}Z\s+(\d{2})\d{2}\/(\d{2})\d{2}\s+([\s\S]*)$/);
+        if (m) { baseDay = parseInt(m[2], 10); rows.push({label: 'Base', value: clean(m[4])}); continue; }
+        m = seg.match(/^▶ From (\d{2})(\d{2})(\d{2})\s+([\s\S]*)$/);
+        if (m) {
+           const day = parseInt(m[1], 10);
+           const label = `From ${m[2]}:${m[3]}Z` + (baseDay !== null && day !== baseDay ? ` (${ordinal(day)})` : '');
+           rows.push({label, value: clean(m[4])}); continue;
+        }
+        m = seg.match(/^▶ Temporary Condition:\s*([\s\S]*)$/);
+        if (m) { rows.push({label: 'Temporary', value: clean(m[1])}); continue; }
+        m = seg.match(/^▶ (\d+)% Probability\s+([\s\S]*)$/);
+        if (m) { rows.push({label: `${m[1]}% Prob`, value: clean(m[2])}); continue; }
+        m = seg.match(/^BECMG\s+([\s\S]*)$/);
+        if (m) { rows.push({label: 'Becoming', value: clean(m[1])}); continue; }
+        if (rows.length > 0) rows[rows.length - 1].value += ' ' + clean(seg);
+        else rows.push({label: '', value: clean(seg)});
+     }
+     return rows;
+  }
+
+  // Renders label/value rows into an aviation card as the two-column grid.
+  function renderDataGrid(el, rows) {
+     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+     el.innerHTML = `<div class="data-grid">${rows.map(r => `<span class="dg-label">${esc(r.label)}</span><span class="dg-value">${esc(r.value)}</span>`).join('')}</div>`;
   }
 
   async function fetchAviation(stationsUrl) {
@@ -773,12 +817,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (footerStation) footerStation.innerText = `Sector ${validStation}`;
 
     if (metarResult) {
-      metarData.innerText = translateMETAR(metarResult.properties) || "No valid METAR properties found.";
+      const metarRows = translateMETAR(metarResult.properties);
+      if (metarRows.length > 0) renderDataGrid(metarData, metarRows);
+      else metarData.innerText = "No valid METAR properties found.";
     } else { metarData.innerText = "Error loading METAR telemetry."; }
 
     if (tafResult) {
        const cleanText = tafResult.productText.replace(/\r\n/g, '\n');
-       tafData.innerText = translateTAF(cleanText) || "No valid TAF string found.";
+       const decoded = translateTAF(cleanText);
+       const rows = decoded ? tafRows(decoded) : [];
+       if (rows.length > 0) renderDataGrid(tafData, rows);
+       else tafData.innerText = decoded || "No valid TAF string found.";
     } else { tafData.innerText = "Error loading TAF structures."; }
   }
 
