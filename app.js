@@ -570,6 +570,13 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="forecast-metric" style="color:#fcd34d;"><span class="label">24 HR Precip</span> <span>${precipAccumulationStr}</span></div>
           <div class="forecast-metric"><span class="label">Humidity</span> <span>${rhStr}</span></div>
           <div class="forecast-metric"><span class="label">Feels Like</span> <span>${feelStr}</span></div>
+
+          <!-- Kiosk-only second line (Option B, chosen 2026-10-28): on the TV
+               the metric rows above are hidden, so rain and wind ride on this
+               one line instead. The amount appears only when the forecast
+               expects measurable precipitation. Hidden outside kiosk mode,
+               where the metric rows already carry the same facts. -->
+          <div class="forecast-subline"><span>Rain <b>${rainProb}%</b>${parseFloat(precipAccumulationStr) >= 0.05 ? `<span style="white-space:nowrap"> · <b>${precipAccumulationStr.replace('"', ' in')}</b> expected</span>` : ''}</span><span class="sub-wind">Wind <b>${primary.windDirection ? primary.windDirection + ' ' : ''}${windSpeed}</b></span></div>
         </div>
       `;
     }
