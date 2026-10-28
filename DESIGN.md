@@ -35,6 +35,7 @@ All values live as variables in :root at the top of styles.css; retint there, ne
 - Accent moments: section headings, clocks, the solar strip, the search button, and the radar opacity slider (accent-color) all take var(--accent).
 - Footer: the standard closing line above the credits, "A Northbrand Collective project · northbrand.net" with the link in the accent. Kiosk mode hides the footer by the app's own rule; that is expected and fine.
 - 7-day cards in kiosk mode carry a second line (Option B, chosen 2026-10-28): rain chance on the left (with the expected amount when it is more than a trace, 0.05 in or over) and wind direction and speed on the right. Outside kiosk mode the subline is hidden and the cards' metric rows carry the same facts.
+- Aviation cards render as two-column data grids (Option A, chosen 2026-10-28): the METAR as label/value rows, the TAF as one row per forecast segment (Base, From groups, Temporary, probability) with transmission headers dropped. Never go back to hand-padded text columns; alignment must stay structural so it holds in any font.
 
 ## 5. Layout
 
