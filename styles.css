@@ -357,6 +357,11 @@ body {
 }
 .forecast-metric span.label { color: var(--text-muted); font-weight: 500;}
 
+/* The rain and wind subline on 7-day cards is a kiosk-mode element (the TV
+   hides the metric rows, so the subline carries those two facts there).
+   Everywhere else it stays hidden; the metric rows do the job. */
+.forecast-subline { display: none; }
+
 /* Aviation Panel */
 .aviation-panel {
   display: flex;
@@ -718,11 +723,13 @@ body.kiosk-mode .forecast-layout {
 body.kiosk-mode .forecast-card {
   display: flex !important;
   flex-direction: row !important;
+  flex-wrap: wrap !important; /* lets the subline drop to its own second row */
   align-items: center !important;
   justify-content: space-between !important;
   padding: 6px 12px !important;
   border-radius: 8px !important;
   gap: 12px !important;
+  row-gap: 2px !important;
 }
 body.kiosk-mode .forecast-card:hover {
   transform: none !important; /* No hover transitions on TV display */
@@ -749,19 +756,23 @@ body.kiosk-mode .forecast-card .forecast-temp {
 body.kiosk-mode .forecast-card .forecast-metric {
   display: none !important;
 }
-/* Re-enable just the 7-day precip chance */
-body.kiosk-mode .forecast-card .forecast-metric:nth-of-type(3) {
+/* Option B (2026-10-28): the rain and wind subline is the second row of the
+   TV card. This replaces an older "re-enable the precip metric" rule whose
+   nth-of-type selector never matched anything, so precip never showed. */
+body.kiosk-mode .forecast-card .forecast-subline {
   display: flex !important;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  width: auto !important;
-  font-size: 0.8rem !important;
-  color: var(--accent) !important;
+  flex-basis: 100% !important;
+  justify-content: space-between !important;
+  font-size: 0.85rem !important;
+  color: var(--text-muted) !important;
 }
-body.kiosk-mode .forecast-card .forecast-metric:nth-of-type(3) span.label {
-  display: none !important;
+body.kiosk-mode .forecast-card .forecast-subline b {
+  color: var(--text-main) !important;
+  font-weight: 600 !important;
+}
+body.kiosk-mode .forecast-card .forecast-subline .sub-wind {
+  white-space: nowrap !important;
+  text-align: right !important;
 }
 
 /* Column 3: Aviation Panel (METAR card above TAF card) */
