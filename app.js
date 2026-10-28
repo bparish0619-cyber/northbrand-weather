@@ -686,7 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
           .replace(/SHRA/g, 'Rain Showers ')
           .replace(/VCTS/g, 'Thunderstorms in vicinity ')
           .replace(/BR/g, 'Mist ')
-          .replace(/FM/g, '▶ From ')
+          .replace(/\bFM(\d{6})\b/g, '▶ From $1')
           .replace(/TEMPO/g, '▶ Temporary Condition: ')
           .replace(/PROB30/g, '▶ 30% Probability ');
        return parsed;
@@ -736,9 +736,9 @@ document.addEventListener('DOMContentLoaded', () => {
      const rows = [];
      let baseDay = null;
      for (const seg of translated.split('\n\n').map(x => x.trim()).filter(Boolean)) {
-        if (/^\d{3}$/.test(seg) || /^FTUS/.test(seg) || /^TAF[A-Z]{2,4}$/.test(seg) || seg === 'TAF') continue;
-        let m = seg.match(/^([A-Z]{4})\s+\d{6}Z\s+(\d{2})\d{2}\/(\d{2})\d{2}\s+([\s\S]*)$/);
-        if (m) { baseDay = parseInt(m[2], 10); rows.push({label: 'Base', value: clean(m[4])}); continue; }
+        if (/^\d{3}$/.test(seg) || /^FT[A-Z]{2}\d{2}\b/.test(seg) || /^TAF[A-Z]{2,4}$/.test(seg) || seg === 'TAF' || /^TAF (AMD|COR|RTD)$/.test(seg)) continue;
+        let m = seg.match(/^([A-Z]{4})\s+\d{6}Z\s+(?:(COR|AMD|RTD)\s+)?(\d{2})\d{2}\/(\d{2})\d{2}\s+([\s\S]*)$/);
+        if (m) { baseDay = parseInt(m[3], 10); rows.push({label: 'Base', value: clean(m[5])}); continue; }
         m = seg.match(/^▶ From (\d{2})(\d{2})(\d{2})\s+([\s\S]*)$/);
         if (m) {
            const day = parseInt(m[1], 10);
