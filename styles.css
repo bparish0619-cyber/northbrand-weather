@@ -368,7 +368,7 @@ body {
 .aviation-item { background: var(--glass-bg); padding: 16px; }
 .aviation-item h3 { font-size: 0.95rem; margin-bottom: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;}
 .aviation-item h3 span { color: var(--text-main); font-weight: 500; font-size: 0.85rem; margin-left: 8px; }
-.aviation-item pre { font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; color: #e2e8f0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.4;}
+.aviation-item pre { font-family: 'Courier New', Courier, monospace; font-size: 1rem; color: #e2e8f0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;}
 
 /* Discussion Section */
 .discussion-panel { padding: 24px; max-height: 400px; overflow-y: auto; }
@@ -778,7 +778,7 @@ body.kiosk-mode .aviation-item {
   background: var(--glass-bg) !important;
   border: 1px solid var(--glass-border) !important;
   border-radius: 8px !important;
-  padding: 8px !important;
+  padding: 12px !important;
 }
 body.kiosk-mode .aviation-item:nth-child(1) {
   flex-shrink: 0 !important;
@@ -790,21 +790,24 @@ body.kiosk-mode .aviation-item:nth-child(2) {
   min-height: 0 !important;
 }
 body.kiosk-mode .aviation-item h3 {
-  font-size: 0.75rem !important;
-  margin-bottom: 4px !important;
+  font-size: 0.9rem !important;
+  margin-bottom: 6px !important;
   letter-spacing: 0.5px !important;
 }
 body.kiosk-mode .aviation-item h3 span {
-  font-size: 0.7rem !important;
+  font-size: 0.8rem !important;
   margin-left: 4px !important;
 }
+/* TV readability bump (2026-10-28, Brandon's request): kiosk used to shrink
+   the METAR and TAF text to 0.7rem at 1.2 line-height, too small and too
+   tight from across a room. 1rem at 1.65 reads at TV distance. */
 body.kiosk-mode .aviation-item pre {
-  font-size: 0.7rem !important;
-  line-height: 1.2 !important;
+  font-size: 1rem !important;
+  line-height: 1.65 !important;
   overflow-y: auto !important;
 }
 body.kiosk-mode .aviation-item:nth-child(1) pre {
-  max-height: 120px !important; /* METAR stays compact */
+  max-height: 200px !important; /* METAR stays compact, sized for the bigger text */
 }
 body.kiosk-mode .aviation-item:nth-child(2) pre {
   flex: 1 !important;
