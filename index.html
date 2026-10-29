@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#14161c">
+  <meta name="description" content="Northbrand Weather is a public weather dashboard for Abilene, Texas, showing National Weather Service forecasts, radar, and aviation weather reports (METAR and TAF) for Abilene Regional Airport.">
   <title>Northbrand Weather</title>
   <link rel="icon" type="image/jpeg" href="assets/weather-icon-northbrand.jpg">
   
@@ -18,7 +19,11 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  
+  <!-- Plain description for crawlers and no-JavaScript visitors: the
+       dashboard itself is drawn by app.js, so this text sits in a
+       noscript block and never changes the on-screen layout. -->
+  <noscript><p>Northbrand Weather is a public weather dashboard for Abilene, Texas, showing National Weather Service forecasts, radar, and aviation weather reports (METAR and TAF) for Abilene Regional Airport.</p></noscript>
+
   <div class="dashboard-wrapper">
     <header class="top-nav glass-panel">
       <div class="site-brand">
