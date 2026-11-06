@@ -40,6 +40,35 @@ document.addEventListener('DOMContentLoaded', () => {
   let refreshTimerId = null;
   let clockTimerId = null;
 
+  // ============================================================
+  // DEFAULT LOCATION *** Brandon: change this to change the
+  // city the page opens on ***
+  //
+  // The page loads this location automatically when the address
+  // does not name a place (no lat/lon and no q in the URL) and
+  // the visitor has not previously chosen "always use GPS".
+  // It is also the fallback when an automatic GPS load fails,
+  // so the dashboard never opens blank.
+  //
+  // Set to Abilene, TX on 2026-11-06 at Brandon's request.
+  // Coordinates are Abilene city center.
+  // To use a different starting city, change name, lat, and lon
+  // here only: search, the GPS button, and URL parameters still
+  // override this default exactly as before.
+  // ============================================================
+  const DEFAULT_LOCATION = {
+    name: 'Abilene, TX',
+    lat: 32.4487,
+    lon: -99.7331
+  };
+
+  // Load the default location above and label the search box
+  // with its name, so the starting city is visible on screen.
+  function loadDefaultLocation() {
+    locationInput.value = DEFAULT_LOCATION.name;
+    fetchDashboardDataByCoords(DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lon);
+  }
+
   // --- Basemap Provider ---
   // CARTO's basemap CDN now requires an API key. Anonymous requests still return
   // tiles, but they are stamped with an "API KEY REQUIRED" watermark, which is what
@@ -225,11 +254,25 @@ document.addEventListener('DOMContentLoaded', () => {
           },
           (err) => {
              if (geoButton) geoButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M16 8l-8 3.5 2.5 1.5 1.5 2.5z"></path></svg>`;
-             if (!isAutoLoad) alert("Geolocation failed: " + err.message);
+             if (!isAutoLoad) {
+               alert("Geolocation failed: " + err.message);
+             } else {
+               // An automatic GPS load failed (denied, timed out, or
+               // no fix available): fall back to the default location
+               // (Abilene, TX, see DEFAULT_LOCATION above) so the
+               // dashboard still shows weather instead of opening blank.
+               loadDefaultLocation();
+             }
           }
         );
-      } else { 
-         if (!isAutoLoad) alert("Geolocation not supported by your browser."); 
+      } else {
+         if (!isAutoLoad) {
+           alert("Geolocation not supported by your browser.");
+         } else {
+           // Same fallback as the error case above: no geolocation
+           // support on an automatic load means the default location.
+           loadDefaultLocation();
+         }
       }
   }
 
@@ -269,6 +312,12 @@ document.addEventListener('DOMContentLoaded', () => {
      searchForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
   } else if (localStorage.getItem('alwaysUseGPS') === 'true') {
      executeGeolocation(true);
+  } else {
+     // No place named in the URL and no saved GPS choice: open on
+     // the default location (Abilene, TX, see DEFAULT_LOCATION
+     // above). Before 2026-11-06 this branch did not exist, so a
+     // plain visit to the page loaded no weather at all.
+     loadDefaultLocation();
   }
 
   searchForm.addEventListener('submit', async (e) => {
