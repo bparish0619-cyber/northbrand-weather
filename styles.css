@@ -862,3 +862,213 @@ body.kiosk-mode .discussion-panel pre {
 /* V1 theme fix (2026-10-28): the radar opacity slider used the browser's
    default blue; tint it with the page accent instead. */
 input[type="range"] { accent-color: var(--accent); }
+
+/* ============================================================
+   NOSTALGIA MODE (added 2026-11-09 at Brandon's request)
+   The retro Weather Channel style overlay. Everything below is
+   scoped to .nostalgia-screen or body.nostalgia-mode, so the
+   modern dashboard's theme above is untouched. The overlay is
+   shown only when app.js turns the mode on (toggle button,
+   remembered choice, or ?nostalgia=on in the address).
+   The blue here is deliberate: it is the old broadcast look,
+   inside this overlay only. It is not a page accent.
+   ============================================================ */
+body.nostalgia-mode { overflow: hidden; }
+.nostalgia-screen[hidden] { display: none; }
+
+.nostalgia-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Silkscreen', 'Courier New', monospace;
+  color: #ffffff;
+  background: linear-gradient(180deg, #0a2a6b 0%, #071c4d 100%);
+  text-shadow: 2px 2px 0 rgba(0, 18, 54, 0.55);
+  overflow: hidden;
+}
+
+.nx-topbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 2vw;
+  padding: 2.2vh 3vw 1.6vh;
+}
+.nx-logo-box {
+  flex-shrink: 0;
+  background: #0b3d91;
+  border: 3px solid #dfe9ff;
+  border-radius: 6px;
+  padding: 0.8vh 1.2vw;
+  text-align: center;
+  line-height: 1.15;
+  min-width: 15vw;
+}
+.nx-logo-name { font-weight: 700; font-size: clamp(0.8rem, 1.6vw, 1.6rem); letter-spacing: 0.04em; }
+.nx-logo-city { font-size: clamp(0.7rem, 1.4vw, 1.3rem); background: rgba(255,255,255,0.16); margin-top: 0.5vh; padding: 0.2vh 0.4vw; border-radius: 3px; }
+.nx-screen-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: clamp(1.3rem, 3vw, 2.7rem);
+  font-weight: 700;
+}
+.nx-clock-box { flex-shrink: 0; text-align: right; line-height: 1.15; }
+.nx-clock { font-size: clamp(1.3rem, 3.4vw, 3.2rem); font-weight: 700; }
+.nx-date { font-size: clamp(0.9rem, 2vw, 1.9rem); }
+.nx-exit {
+  margin-top: 0.8vh;
+  font-family: inherit;
+  font-size: clamp(0.65rem, 1.1vw, 1rem);
+  color: #dfe9ff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(223, 233, 255, 0.5);
+  border-radius: 4px;
+  padding: 0.4vh 0.8vw;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.2s ease;
+}
+.nx-exit:hover, .nx-exit:focus { opacity: 1; }
+
+/* The magenta and orange diagonal band under the top bar */
+.nx-band {
+  height: 3.4vh;
+  min-height: 14px;
+  background: linear-gradient(96deg, #ffb03a 0%, #ff7847 28%, #e8488a 58%, #6a4fd0 100%);
+  border-top: 3px solid rgba(223, 233, 255, 0.65);
+  border-bottom: 3px solid rgba(223, 233, 255, 0.65);
+}
+
+.nx-panel {
+  position: relative;
+  flex: 1;
+  margin: 3vh 3.5vw;
+  background: linear-gradient(180deg, #2a7de1 0%, #1250b8 55%, #0d3f9e 100%);
+  border: 4px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  padding: 3vh 4vw;
+  display: flex;
+  gap: 4vw;
+  overflow: hidden;
+}
+.nx-panel[hidden] { display: none; }
+/* Subtle CRT scanlines over the panel, kept faint for TV legibility */
+.nx-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 5px);
+}
+
+.nx-cc-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 30%;
+}
+/* The Current Conditions pieces size off viewport HEIGHT (vh), not
+   width: the panel's height is what runs out first on a TV, and the
+   first test build (sized in vw) clipped the temperature at the top
+   and the wind line at the bottom. Keep these in vh. */
+.nx-temp { font-size: clamp(4rem, 17vh, 12rem); font-weight: 700; line-height: 1; }
+.nx-cond { font-size: clamp(1.3rem, 5.5vh, 3.4rem); line-height: 1.15; margin-top: 1vh; }
+.nx-icon { margin: 1.5vh 0; }
+.nx-icon svg { height: clamp(70px, 19vh, 180px); width: auto; filter: drop-shadow(3px 3px 0 rgba(0, 18, 54, 0.45)); }
+.nx-wind { font-size: clamp(1.1rem, 4.6vh, 2.8rem); line-height: 1.2; }
+
+.nx-cc-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2vh;
+}
+.nx-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 3vw;
+  font-size: clamp(1.25rem, 4.8vh, 3rem);
+  line-height: 1.25;
+}
+.nx-row b { font-weight: 700; text-align: right; }
+.nx-row-city { font-size: clamp(1.4rem, 5.6vh, 3.6rem); font-weight: 700; }
+
+.nx-fc-rows { flex: 1; display: flex; flex-direction: column; width: 100%; min-height: 0; }
+/* Each row takes an equal share of the panel height, so four rows
+   always fit even when a long condition phrase wraps to two lines. */
+.nx-fc-row {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 3vw;
+  padding: 1vh 0;
+  border-bottom: 3px dashed rgba(255, 255, 255, 0.3);
+  font-size: clamp(1.15rem, 2.6vw, 2.4rem);
+}
+.nx-fc-row:last-child { border-bottom: none; }
+.nx-fc-name { min-width: 24%; font-weight: 700; }
+.nx-fc-icon svg { width: clamp(44px, 5.4vw, 84px); height: auto; display: block; }
+.nx-fc-cond { flex: 1; line-height: 1.18; }
+.nx-fc-temp { font-weight: 700; white-space: nowrap; }
+/* Degree signs render in Inter: the pixel font's degree glyph reads
+   like a plus sign at these sizes (found in the 2026-11-09 test). */
+.nx-deg { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.52em; vertical-align: 0.8em; }
+.nx-fc-pop { min-width: 12%; text-align: right; color: #bfe0ff; }
+
+/* The bottom crawl (the old LDL ticker) */
+.nx-ticker {
+  position: relative;
+  height: 7.5vh;
+  min-height: 44px;
+  background: #071c4d;
+  border-top: 3px solid #dfe9ff;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.nx-ticker-track {
+  display: flex;
+  white-space: nowrap;
+  will-change: transform;
+  animation: nx-scroll 60s linear infinite;
+}
+.nx-ticker-track span {
+  font-size: clamp(1.1rem, 2.6vw, 2.4rem);
+  padding-right: 6vw;
+}
+@keyframes nx-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.nx-ticker-station {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 1.6vw;
+  background: #0b3d91;
+  border-left: 3px solid #dfe9ff;
+  font-size: clamp(1rem, 2.2vw, 2rem);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-ticker-track { animation: none; }
+}
+@media (max-width: 700px) {
+  .nx-panel { flex-direction: column; gap: 2vh; padding: 3vh 5vw; }
+  .nx-cc-right { gap: 1.4vh; }
+  .nx-screen-title { display: none; }
+}
