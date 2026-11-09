@@ -323,12 +323,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // SECONDS: how long each screen stays up per visit.
   // RADAR_FRAMES: how many past radar frames the loop plays.
   // RADAR_FRAME_MS: time per animation frame; smaller is faster.
+  // RADAR_DEFAULT_ZOOM: the radar framing when the web address
+  //   carries no zoom of its own (an address zoom always wins).
+  //   Higher numbers are closer in; 8 is the local framing the
+  //   AbleSign address uses, 4 is the whole country.
   // TICKER_SECONDS_PER_CHAR: crawl speed; smaller is faster.
   // ============================================================
   const NOSTALGIA = {
     SECONDS: { current: 10, forecast: 10, radar: 10 },
     RADAR_FRAMES: 8,
     RADAR_FRAME_MS: 700,
+    RADAR_DEFAULT_ZOOM: 8,
     TICKER_SECONDS_PER_CHAR: 0.22
   };
   let nostalgiaOn = false;
@@ -467,14 +472,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // layers here, that would throw away the tiles already loaded.
   // Honor the zoom from the web address (Brandon, 2026-11-09): the
   // value captured at load, before the app's URL sync could rewrite
-  // it. Without a zoom in the address, the map keeps its own view.
+  // it. When the address carries no zoom (a phone opened from a
+  // bare link, where the app itself defaults the map to the whole
+  // country at zoom 4), the radar screen still frames the local
+  // area at RADAR_DEFAULT_ZOOM instead of inheriting that view.
   function settleNostalgiaRadarMap(withZoom) {
     if (!map) return;
     const apply = () => {
       if (!map) return;
       map.invalidateSize();
-      if (withZoom && nostalgiaScreen === 'radar' && !isNaN(nostalgiaAddressZoom)) {
-        map.setView([currentLat ?? DEFAULT_LOCATION.lat, currentLon ?? DEFAULT_LOCATION.lon], nostalgiaAddressZoom, { animate: false });
+      if (withZoom && nostalgiaScreen === 'radar') {
+        const targetZoom = !isNaN(nostalgiaAddressZoom) ? nostalgiaAddressZoom : NOSTALGIA.RADAR_DEFAULT_ZOOM;
+        map.setView([currentLat ?? DEFAULT_LOCATION.lat, currentLon ?? DEFAULT_LOCATION.lon], targetZoom, { animate: false });
       }
     };
     requestAnimationFrame(() => requestAnimationFrame(apply));
@@ -1308,6 +1317,25 @@ document.addEventListener('DOMContentLoaded', () => {
               
               const metarRes = await fetch(`https://api.weather.gov/stations/${station}/observations/latest`);
               if (metarRes.ok) { metarResult = await metarRes.json(); }
+
+              // A station's newest report sometimes posts with the
+              // headline fields still empty (temperature, dewpoint,
+              // humidity null) and fills in afterward; Brandon hit
+              // one on 2026-11-09 and the Current Conditions screen
+              // showed dashes. If the newest report has no
+              // temperature, walk back through the station's recent
+              // reports and use the newest one that carries one.
+              // Reports are minutes apart, so the fallback is fresh.
+              if (metarResult?.properties?.temperature?.value == null) {
+                try {
+                  const recentRes = await fetch(`https://api.weather.gov/stations/${station}/observations?limit=5`);
+                  if (recentRes.ok) {
+                    const recent = await recentRes.json();
+                    const complete = (recent.features || []).find(f => f.properties?.temperature?.value != null);
+                    if (complete) metarResult = complete;
+                  }
+                } catch (e) { /* keep the original report */ }
+              }
               
               break; 
            }
