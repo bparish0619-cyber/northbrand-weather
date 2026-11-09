@@ -305,30 +305,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ways out: the Exit button on the retro screen, the Esc key,
   // or the top bar button once you are back on the dashboard.
   //
-  // It only READS data the dashboard already fetched: the latest
+  // It READS data the dashboard already fetched: the latest
   // station observation (updateNostalgiaConditions, called from
-  // fetchAviation), the forecast periods (nostalgiaPeriods, set in
-  // fetchForecastExt), the Area Forecast Discussion text (set in
-  // fetchDiscussion), and the dashboard's own radar map, which is
-  // MOVED into the retro screen while that screen is up and moved
-  // back untouched when it leaves. It makes no requests of its own.
+  // fetchAviation) and the forecast periods (nostalgiaPeriods, set
+  // in fetchForecastExt). The radar screen MOVES the dashboard's
+  // own map into the retro screen while it is up and moves it back
+  // untouched when it leaves, and animates it as a loop of recent
+  // RainViewer frames over the same map; the only request the mode
+  // makes itself is that one RainViewer frame list.
   //
   // The screens rotate: Current Conditions, Local Forecast, Local
-  // Radar, Forecast Discussion. A screen joins the rotation only
-  // when its data exists. The discussion is far too long for one
-  // screen (Brandon flagged this when he asked for it), so that
-  // screen auto-scrolls slowly, pauses where it left off when the
-  // rotation moves on, and resumes on its next turn.
+  // Radar. A screen joins the rotation only when its data exists.
+  // The Area Forecast Discussion screen was tried on 2026-11-09
+  // and removed the same day at Brandon's direction.
   //
   // *** Settings Brandon may want to change ***
-  // SECONDS: how long each screen stays up per visit. The
-  //   discussion gets longer because it scrolls.
-  // DISCUSSION_SCROLL_PX_PER_SEC: discussion scroll speed.
+  // SECONDS: how long each screen stays up per visit.
+  // RADAR_FRAMES: how many past radar frames the loop plays.
+  // RADAR_FRAME_MS: time per animation frame; smaller is faster.
   // TICKER_SECONDS_PER_CHAR: crawl speed; smaller is faster.
   // ============================================================
   const NOSTALGIA = {
-    SECONDS: { current: 10, forecast: 10, radar: 10, discussion: 15 },
-    DISCUSSION_SCROLL_PX_PER_SEC: 26,
+    SECONDS: { current: 10, forecast: 10, radar: 10 },
+    RADAR_FRAMES: 8,
+    RADAR_FRAME_MS: 700,
     TICKER_SECONDS_PER_CHAR: 0.22
   };
   let nostalgiaOn = false;
@@ -337,13 +337,20 @@ document.addEventListener('DOMContentLoaded', () => {
   let nostalgiaPeriods = [];    // forecast periods, reused for the crawl and forecast screen
   let nostalgiaCityLabel = '';  // "Abilene, TX", from the points response
   let nostalgiaCityShort = '';  // "Abilene"
-  let nostalgiaDiscussion = ''; // Area Forecast Discussion product text
+  // The zoom the page was OPENED with, captured now, during the
+  // first synchronous pass, before the app's own URL sync
+  // (updateURLParams) starts rewriting the address to match the
+  // map's current zoom. The radar screen honors this value, which
+  // is what "zoom from the web address" means for AbleSign.
+  const nostalgiaAddressZoom = parseInt(new URLSearchParams(window.location.search).get('zoom'), 10);
   let nostalgiaScreen = 'current'; // name of the screen currently up
   let nostalgiaTimers = [];     // interval ids, all cleared when the mode turns off
   let nostalgiaAdvanceId = null;   // timeout id for the next screen swap
-  let nostalgiaAfdTimer = null;    // interval id for the discussion scroll
-  let nostalgiaAfdOffset = 0;      // discussion scroll position, kept between visits
-  let nostalgiaAfdHold = 0;        // scroll ticks to wait at the bottom before rewinding
+  let nostalgiaRvLayers = [];      // RainViewer animation layers, on the map only during the radar screen
+  let nostalgiaRvTimer = null;     // interval id for the radar animation
+  let nostalgiaRvIdx = 0;          // animation frame currently showing
+  let nostalgiaRvHold = false;     // true while pausing on the newest frame
+  let nostalgiaRadarWasOn = false; // the dashboard's own radar layer was hidden for the animation
 
   const nxEl = id => document.getElementById(id);
 
@@ -360,12 +367,15 @@ document.addEventListener('DOMContentLoaded', () => {
     nostalgiaTimers.forEach(clearInterval);
     nostalgiaTimers = [];
     if (nostalgiaAdvanceId) { clearTimeout(nostalgiaAdvanceId); nostalgiaAdvanceId = null; }
-    stopNostalgiaDiscussionScroll();
+    stopNostalgiaRadarAnimation();
     if (on) {
       nostalgiaScreen = 'current';
       applyNostalgiaScreen();
       renderNostalgiaClock();
       renderNostalgiaObserved();
+      // Fetch the radar animation frames now so the loop is ready
+      // when the radar screen's turn comes.
+      prepareNostalgiaRadarFrames();
       // 1s keeps the retro clock honest; 30s refreshes the
       // "Observed: X Min Ago" line; the rotation runs on its own
       // per-screen timeouts (see scheduleNostalgiaAdvance).
@@ -383,17 +393,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // A screen is only offered when its data exists (checked in
   // nostalgiaScreensInRotation below).
   const NOSTALGIA_SCREENS = {
-    current:    { panel: 'nx-panel-current',    title: 'Current Conditions' },
-    forecast:   { panel: 'nx-panel-forecast',   title: 'Local Forecast' },
-    radar:      { panel: 'nx-panel-radar',      title: 'Local Radar' },
-    discussion: { panel: 'nx-panel-discussion', title: 'Forecast Discussion' }
+    current:  { panel: 'nx-panel-current',  title: 'Current Conditions' },
+    forecast: { panel: 'nx-panel-forecast', title: 'Local Forecast' },
+    radar:    { panel: 'nx-panel-radar',    title: 'Local Radar' }
   };
 
   function nostalgiaScreensInRotation() {
     const list = ['current'];
     if (nostalgiaPeriods.length > 0) list.push('forecast');
     list.push('radar');
-    if (nostalgiaDiscussion.trim().length > 40) list.push('discussion');
     return list;
   }
 
@@ -418,12 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (title) title.textContent = NOSTALGIA_SCREENS[nostalgiaScreen].title;
     // The radar map lives in the retro screen only while that
-    // screen is up; every other screen sends it home first.
-    if (nostalgiaScreen === 'radar') moveNostalgiaRadarIn();
-    else restoreNostalgiaRadar();
-    // The discussion scrolls only while its screen is up.
-    if (nostalgiaScreen === 'discussion') startNostalgiaDiscussionScroll();
-    else stopNostalgiaDiscussionScroll();
+    // screen is up, and its animation loop runs only then; every
+    // other screen sends it home first, animation off.
+    if (nostalgiaScreen === 'radar') {
+      moveNostalgiaRadarIn();
+      startNostalgiaRadarAnimation();
+    } else {
+      restoreNostalgiaRadar();
+    }
   }
 
   // --- The radar move ---
@@ -439,51 +449,98 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!nostalgiaRadarHome) nostalgiaRadarHome = { parent: mapEl.parentElement, next: mapEl.nextSibling };
     host.appendChild(mapEl);
     mapEl.classList.add('nx-radar-map');
-    setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+    settleNostalgiaRadarMap(true);
   }
   function restoreNostalgiaRadar() {
+    stopNostalgiaRadarAnimation();
     const mapEl = document.getElementById('radar-map');
     if (!mapEl || !nostalgiaRadarHome || mapEl.parentElement === nostalgiaRadarHome.parent) return;
     nostalgiaRadarHome.parent.insertBefore(mapEl, nostalgiaRadarHome.next);
     mapEl.classList.remove('nx-radar-map');
-    setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+    settleNostalgiaRadarMap(false);
+  }
+  // After a move, Leaflet must re-measure its container, and one
+  // early attempt is not enough, so measure twice (next frames,
+  // then a beat later). On the way IN, also re-assert the address
+  // zoom without animation. Tiles for the wider overlay size then
+  // stream in on their own, center first; do NOT redraw the tile
+  // layers here, that would throw away the tiles already loaded.
+  // Honor the zoom from the web address (Brandon, 2026-11-09): the
+  // value captured at load, before the app's URL sync could rewrite
+  // it. Without a zoom in the address, the map keeps its own view.
+  function settleNostalgiaRadarMap(withZoom) {
+    if (!map) return;
+    const apply = () => {
+      if (!map) return;
+      map.invalidateSize();
+      if (withZoom && nostalgiaScreen === 'radar' && !isNaN(nostalgiaAddressZoom)) {
+        map.setView([currentLat ?? DEFAULT_LOCATION.lat, currentLon ?? DEFAULT_LOCATION.lon], nostalgiaAddressZoom, { animate: false });
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(apply));
+    setTimeout(apply, 350);
   }
 
-  // --- The discussion scroll ---
-  // The viewport hides its overflow; the scroll position is kept in
-  // nostalgiaAfdOffset and re-applied on every tick, because a
-  // hidden panel does not reliably keep its own scroll position.
-  // At the bottom it waits a few seconds, then rewinds to the top.
-  function startNostalgiaDiscussionScroll() {
-    stopNostalgiaDiscussionScroll();
-    const vp = nxEl('nx-afd-viewport');
-    if (!vp) return;
-    vp.scrollTop = nostalgiaAfdOffset;
-    const stepPx = Math.max(1, Math.round(NOSTALGIA.DISCUSSION_SCROLL_PX_PER_SEC / 20)); // 20 ticks per second
-    nostalgiaAfdTimer = setInterval(() => {
-      const max = vp.scrollHeight - vp.clientHeight;
-      if (max <= 0) return;
-      if (nostalgiaAfdHold > 0) {
-        nostalgiaAfdHold--;
-        if (nostalgiaAfdHold === 0) { nostalgiaAfdOffset = 0; vp.scrollTop = 0; }
-        return;
+  // --- The radar animation loop ---
+  // RainViewer publishes recent radar frames as ordinary Leaflet
+  // tile layers. During the radar screen, the newest RADAR_FRAMES
+  // frames are stacked on the map and cycled like the old broadcast
+  // radar loops (color scheme 2 is RainViewer's "The Weather
+  // Channel" palette, a fitting accident). The dashboard's own
+  // NEXRAD layer steps aside while the loop plays so precipitation
+  // is not drawn twice, and comes back when the screen leaves.
+  // If the frame list cannot be fetched, the screen simply shows
+  // the dashboard's normal radar, no harm done.
+  let nostalgiaRvFramePaths = null; // { host, paths: [] } once fetched
+  async function prepareNostalgiaRadarFrames() {
+    if (nostalgiaRvFramePaths) return;
+    try {
+      const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+      const data = await res.json();
+      const past = data?.radar?.past || [];
+      if (past.length > 0) {
+        nostalgiaRvFramePaths = {
+          host: data.host || 'https://tilecache.rainviewer.com',
+          paths: past.slice(-NOSTALGIA.RADAR_FRAMES).map(f => f.path)
+        };
       }
-      nostalgiaAfdOffset = Math.min(max, nostalgiaAfdOffset + stepPx);
-      vp.scrollTop = nostalgiaAfdOffset;
-      if (nostalgiaAfdOffset >= max) nostalgiaAfdHold = 60; // about 3 seconds at the bottom
-    }, 50);
+    } catch (e) { /* the static radar still shows; nothing to report */ }
+    // If the radar screen is already up (frames arrived late), start now.
+    if (nostalgiaOn && nostalgiaScreen === 'radar') startNostalgiaRadarAnimation();
   }
-  function stopNostalgiaDiscussionScroll() {
-    if (nostalgiaAfdTimer) { clearInterval(nostalgiaAfdTimer); nostalgiaAfdTimer = null; }
+  function startNostalgiaRadarAnimation() {
+    if (!map || nostalgiaRvLayers.length > 0) return;
+    if (!nostalgiaRvFramePaths) { prepareNostalgiaRadarFrames(); return; }
+    const { host, paths } = nostalgiaRvFramePaths;
+    if (radarLayer && map.hasLayer(radarLayer)) {
+      map.removeLayer(radarLayer);
+      nostalgiaRadarWasOn = true;
+    }
+    nostalgiaRvLayers = paths.map(p => L.tileLayer(`${host}${p}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0, zIndex: 500 }).addTo(map));
+    nostalgiaRvIdx = nostalgiaRvLayers.length - 1;
+    nostalgiaRvHold = false;
+    showNostalgiaRadarFrame();
+    nostalgiaRvTimer = setInterval(() => {
+      // Pause one extra beat on the newest frame, like the old loops.
+      if (nostalgiaRvIdx === nostalgiaRvLayers.length - 1 && !nostalgiaRvHold) { nostalgiaRvHold = true; return; }
+      nostalgiaRvHold = false;
+      nostalgiaRvIdx = (nostalgiaRvIdx + 1) % nostalgiaRvLayers.length;
+      showNostalgiaRadarFrame();
+    }, NOSTALGIA.RADAR_FRAME_MS);
   }
-  function renderNostalgiaDiscussion() {
-    const el = nxEl('nx-afd-text');
-    if (!el) return;
-    el.textContent = nostalgiaDiscussion || 'Discussion not loaded yet.';
-    nostalgiaAfdOffset = 0;
-    nostalgiaAfdHold = 0;
-    const vp = nxEl('nx-afd-viewport');
-    if (vp) vp.scrollTop = 0;
+  function showNostalgiaRadarFrame() {
+    nostalgiaRvLayers.forEach((layer, i) => layer.setOpacity(i === nostalgiaRvIdx ? 0.85 : 0));
+  }
+  function stopNostalgiaRadarAnimation() {
+    if (nostalgiaRvTimer) { clearInterval(nostalgiaRvTimer); nostalgiaRvTimer = null; }
+    if (map && nostalgiaRvLayers.length > 0) {
+      nostalgiaRvLayers.forEach(layer => map.removeLayer(layer));
+    }
+    nostalgiaRvLayers = [];
+    if (map && nostalgiaRadarWasOn && radarLayer && !map.hasLayer(radarLayer)) {
+      radarLayer.addTo(map);
+    }
+    nostalgiaRadarWasOn = false;
   }
 
   // City labels on the logo box and the conditions panel.
@@ -1303,9 +1360,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const textRes = await fetch(docId);
         const textData = await textRes.json();
         discussionData.innerText = textData.productText.replace(/\n\s*\n/g, '\n\n');
-        // Nostalgia Mode's discussion screen reads this same text.
-        nostalgiaDiscussion = discussionData.innerText;
-        renderNostalgiaDiscussion();
       } else { discussionData.innerText = "No ambient discussion payloads."; }
     } catch (err) { discussionData.innerText = "Discussion parsing failure.\n" + err.message; }
   }
