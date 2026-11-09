@@ -11,7 +11,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  
+  <!-- Retro display font, used ONLY by Nostalgia Mode (the Weather Channel
+       style overlay). Loaded up front so flipping the toggle never waits on
+       a font fetch; the modern dashboard never uses it. -->
+  <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+
   <!-- Leaflet CSS for Radar -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   
@@ -38,6 +42,11 @@
         <div id="solar-container" class="clocks hidden" style="font-size: 0.82rem; border-color: rgba(251, 191, 36, 0.4); color: #fbbf24;">
           <!-- Populated by JS -->
         </div>
+
+        <!-- Nostalgia Mode toggle: switches to the retro Weather Channel
+             style screen. The address bar can do the same job:
+             ?nostalgia=on (what AbleSign uses) or ?nostalgia=off. -->
+        <button id="nostalgia-toggle" class="glass-button" type="button" title="Toggle Nostalgia Mode">Nostalgia: Off</button>
 
         <!-- Auto Refresh -->
         <div class="refresh-control" title="Auto-Refresh Interval">
@@ -154,6 +163,60 @@
       </section>
 
     </main>
+  </div>
+
+  <!-- ============================================================
+       NOSTALGIA MODE overlay (added 2026-11-09 at Brandon's request)
+       A full-screen retro Weather Channel style skin. Hidden unless
+       the body carries .nostalgia-mode (toggle button, remembered
+       choice, or ?nostalgia=on in the address). It is populated by
+       the Nostalgia Mode section at the end of app.js from the same
+       data the dashboard already fetched; the modern dashboard
+       underneath is never changed. Styles: bottom of styles.css.
+       ============================================================ -->
+  <div id="nostalgia-screen" class="nostalgia-screen" hidden>
+    <div class="nx-topbar">
+      <div class="nx-logo-box">
+        <div class="nx-logo-name">NORTHBRAND WEATHER</div>
+        <div class="nx-logo-city" id="nx-city">Abilene, TX</div>
+      </div>
+      <div class="nx-screen-title" id="nx-screen-title">Current Conditions</div>
+      <div class="nx-clock-box">
+        <div class="nx-clock" id="nx-clock">--:--:--</div>
+        <div class="nx-date" id="nx-date">--- --- -</div>
+        <button id="nostalgia-exit" class="nx-exit" type="button" title="Exit Nostalgia Mode (or press Esc)">Exit</button>
+      </div>
+    </div>
+    <div class="nx-band"></div>
+
+    <!-- Screen 1: Current Conditions, modeled on the classic screen -->
+    <div class="nx-panel" id="nx-panel-current">
+      <div class="nx-cc-left">
+        <div class="nx-temp" id="nx-temp">--<span class="nx-deg">&deg;</span></div>
+        <div class="nx-cond" id="nx-cond">Loading</div>
+        <div class="nx-icon" id="nx-icon"></div>
+        <div class="nx-wind" id="nx-wind">Wind: Calm</div>
+      </div>
+      <div class="nx-cc-right">
+        <div class="nx-row nx-row-city"><span id="nx-loc">Abilene</span></div>
+        <div class="nx-row"><span>Humidity:</span><b id="nx-hum">--%</b></div>
+        <div class="nx-row"><span>Dewpoint:</span><b id="nx-dew">--<span class="nx-deg">&deg;</span></b></div>
+        <div class="nx-row"><span>Visibility:</span><b id="nx-vis">-- Mi</b></div>
+        <div class="nx-row" id="nx-row-pres"><span>Pressure:</span><b id="nx-pres">--.-</b></div>
+        <div class="nx-row"><span>Observed:</span><b id="nx-obs">-- Min Ago</b></div>
+      </div>
+    </div>
+
+    <!-- Screen 2: Local Forecast, swapped in on a timer like the original -->
+    <div class="nx-panel" id="nx-panel-forecast" hidden>
+      <div class="nx-fc-rows" id="nx-fc-rows"></div>
+    </div>
+
+    <!-- Bottom crawl, the old LDL ticker -->
+    <div class="nx-ticker">
+      <div class="nx-ticker-track"><span id="nx-ticker-text">NORTHBRAND WEATHER</span><span id="nx-ticker-text-2">NORTHBRAND WEATHER</span></div>
+      <div class="nx-ticker-station" id="nx-ticker-station">KABI</div>
+    </div>
   </div>
 
   <footer style="text-align: center; padding: 24px; margin-top: 16px;">
