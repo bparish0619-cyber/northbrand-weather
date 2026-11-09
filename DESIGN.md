@@ -10,6 +10,7 @@ Hard constraints (Brandon, 2026-10-28, do not relitigate):
 - The layout is frozen. Same header, same sections, same grid, same kiosk behavior. Theme changes are variables, type, and the logo asset only.
 - No avatar or character art of Zyra anywhere on this page, ever. It displays on a TV in a work breakroom via AbleSign on Google TV.
 - app.js is behavior, not design space: data flow, radar, and kiosk parameters stay untouched by design passes.
+- One sanctioned exception (Brandon, 2026-11-09): Nostalgia Mode, an opt-in full-screen retro overlay that leaves the default dashboard exactly as frozen. It is off by default and never changes the default render; see Components.
 
 ## 2. Palette
 
@@ -36,6 +37,7 @@ All values live as variables in :root at the top of styles.css; retint there, ne
 - Footer: the standard closing line above the credits, "A Northbrand Collective project · northbrand.net" with the link in the accent. Kiosk mode hides the footer by the app's own rule; that is expected and fine.
 - 7-day cards in kiosk mode carry a second line (Option B, chosen 2026-10-28): rain chance on the left (with the expected amount when it is more than a trace, 0.05 in or over) and wind direction and speed on the right. Outside kiosk mode the subline is hidden and the cards' metric rows carry the same facts.
 - Aviation cards render as two-column data grids (Option A, chosen 2026-10-28): the METAR as label/value rows, the TAF as one row per forecast segment (Base, From groups, Temporary, probability) with transmission headers dropped. Never go back to hand-padded text columns; alignment must stay structural so it holds in any font.
+- Nostalgia Mode (added 2026-11-09 at Brandon's request): a full-screen overlay styled on the classic Weather Channel local forecast screens (deep blue, bright blue panel, the orange-to-magenta band, Silkscreen pixel type, scrolling bottom crawl). Two screens swap every 20 seconds: Current Conditions (from the same station observation the aviation card renders) and Local Forecast (the next four periods). Ways in: the Nostalgia button in the top bar (choice remembered per device), or ?nostalgia=on in the address, which is how AbleSign runs it; ?nostalgia=off forces the modern look. Exit: the overlay's Exit button or Esc. It only reads data the dashboard already fetched and makes no requests of its own; its code is one marked section at the end of each file (overlay markup in index.html, .nostalgia-screen styles at the bottom of styles.css, the NOSTALGIA section in app.js with a settings block). The blue inside the overlay is the broadcast look, not a page accent; the no-blue rule still governs the dashboard itself. Two data notes: KABI's NWS observation feed currently reports pressure as null, so the Pressure row hides when the feed sends none; and the overlay's Current Conditions pieces size in viewport-height units so the column can never clip on a TV.
 
 ## 5. Layout
 
