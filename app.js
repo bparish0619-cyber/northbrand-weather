@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // TICKER_SECONDS_PER_CHAR: crawl speed; smaller is faster.
   // ============================================================
   const NOSTALGIA = {
-    SECONDS: { current: 20, forecast: 20, radar: 20, discussion: 45 },
+    SECONDS: { current: 10, forecast: 10, radar: 10, discussion: 15 },
     DISCUSSION_SCROLL_PX_PER_SEC: 26,
     TICKER_SECONDS_PER_CHAR: 0.22
   };
