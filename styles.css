@@ -1073,7 +1073,7 @@ body.nostalgia-mode { overflow: hidden; }
   .nx-screen-title { display: none; }
 }
 
-/* Nostalgia Mode: radar and discussion screens (added 2026-11-09,
+/* Nostalgia Mode: radar screen (added 2026-11-09,
    same day, at Brandon's request). The radar panel holds the
    dashboard's own Leaflet map while that screen is up; the map
    keeps its data colors, only its frame is retro. */
@@ -1093,20 +1093,3 @@ body.nostalgia-mode { overflow: hidden; }
 }
 /* No zoom buttons on the TV screen; the map still pans if dragged */
 #radar-map.nx-radar-map .leaflet-control-zoom { display: none; }
-
-/* The discussion viewport: hides its own overflow and lets app.js
-   drive the scroll position a few pixels at a time. */
-#nx-panel-discussion { display: block; }
-#nx-panel-discussion[hidden] { display: none; }
-.nx-afd-viewport {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
-.nx-afd-text {
-  font-size: clamp(0.95rem, 1.55vw, 1.45rem);
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding-bottom: 6vh;
-}
