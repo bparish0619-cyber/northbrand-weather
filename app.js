@@ -183,6 +183,13 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       url.searchParams.delete('kiosk');
     }
+    // Nostalgia Mode rides the address the same way kiosk does, so an
+    // AbleSign URL can carry it (see the Nostalgia Mode section below).
+    if (document.body.classList.contains('nostalgia-mode')) {
+      url.searchParams.set('nostalgia', 'on');
+    } else {
+      url.searchParams.delete('nostalgia');
+    }
     window.history.replaceState({}, '', url);
   }
 
@@ -280,6 +287,263 @@ document.addEventListener('DOMContentLoaded', () => {
     geoButton.addEventListener('click', () => executeGeolocation(false));
   }
 
+  // ============================================================
+  // NOSTALGIA MODE (added 2026-11-09 at Brandon's request)
+  //
+  // A retro Weather Channel style full-screen skin over the modern
+  // dashboard: a Current Conditions screen and a Local Forecast
+  // screen that swap on a timer, over a scrolling bottom crawl.
+  // OFF by default; the modern dashboard is never changed by it.
+  //
+  // Three ways in, checked in this order at load:
+  //   1. ?nostalgia=on in the address (this is what AbleSign uses;
+  //      ?nostalgia=off in the address forces the modern look).
+  //   2. The choice remembered from the Nostalgia button in the
+  //      top bar (localStorage, per device).
+  //   3. The Nostalgia button itself, which flips the mode and
+  //      remembers the choice for next time.
+  // Ways out: the Exit button on the retro screen, the Esc key,
+  // or the top bar button once you are back on the dashboard.
+  //
+  // It only READS data the dashboard already fetched: the latest
+  // station observation (updateNostalgiaConditions, called from
+  // fetchAviation) and the forecast periods (nostalgiaPeriods, set
+  // in fetchForecastExt). It makes no requests of its own.
+  //
+  // *** Settings Brandon may want to change ***
+  // SCREEN_SECONDS: seconds each retro screen stays up before the
+  //   swap between Current Conditions and Local Forecast.
+  // TICKER_SECONDS_PER_CHAR: crawl speed; smaller is faster.
+  // ============================================================
+  const NOSTALGIA = { SCREEN_SECONDS: 20, TICKER_SECONDS_PER_CHAR: 0.22 };
+  let nostalgiaOn = false;
+  let nostalgiaObs = null;      // latest observation properties (metric, as NWS sends them)
+  let nostalgiaStation = '';    // station id for the current observation, e.g. KABI
+  let nostalgiaPeriods = [];    // forecast periods, reused for the crawl and forecast screen
+  let nostalgiaCityLabel = '';  // "Abilene, TX", from the points response
+  let nostalgiaCityShort = '';  // "Abilene"
+  let nostalgiaScreenIdx = 0;   // 0 = Current Conditions, 1 = Local Forecast
+  let nostalgiaTimers = [];     // interval ids, all cleared when the mode turns off
+
+  const nxEl = id => document.getElementById(id);
+
+  function setNostalgiaMode(on, remember = true) {
+    nostalgiaOn = on;
+    document.body.classList.toggle('nostalgia-mode', on);
+    const screen = nxEl('nostalgia-screen');
+    if (screen) screen.hidden = !on;
+    const btn = nxEl('nostalgia-toggle');
+    if (btn) btn.textContent = on ? 'Nostalgia: On' : 'Nostalgia: Off';
+    if (remember) {
+      try { localStorage.setItem('nostalgiaMode', on ? 'on' : 'off'); } catch (e) {}
+    }
+    nostalgiaTimers.forEach(clearInterval);
+    nostalgiaTimers = [];
+    if (on) {
+      nostalgiaScreenIdx = 0;
+      applyNostalgiaScreen();
+      renderNostalgiaClock();
+      renderNostalgiaObserved();
+      // 1s keeps the retro clock honest; 30s refreshes the
+      // "Observed: X Min Ago" line; SCREEN_SECONDS swaps screens.
+      nostalgiaTimers.push(setInterval(renderNostalgiaClock, 1000));
+      nostalgiaTimers.push(setInterval(renderNostalgiaObserved, 30000));
+      nostalgiaTimers.push(setInterval(() => {
+        if (nostalgiaPeriods.length > 0) {
+          nostalgiaScreenIdx = nostalgiaScreenIdx === 0 ? 1 : 0;
+          applyNostalgiaScreen();
+        }
+      }, NOSTALGIA.SCREEN_SECONDS * 1000));
+    }
+    updateURLParams();
+  }
+
+  function applyNostalgiaScreen() {
+    const cur = nxEl('nx-panel-current');
+    const fc = nxEl('nx-panel-forecast');
+    const title = nxEl('nx-screen-title');
+    if (!cur || !fc || !title) return;
+    const showForecast = nostalgiaScreenIdx === 1;
+    cur.hidden = showForecast;
+    fc.hidden = !showForecast;
+    title.textContent = showForecast ? 'Local Forecast' : 'Current Conditions';
+  }
+
+  // City labels on the logo box and the conditions panel.
+  function renderNostalgiaChrome() {
+    const city = nxEl('nx-city');
+    if (city && nostalgiaCityLabel) city.textContent = nostalgiaCityLabel;
+    const loc = nxEl('nx-loc');
+    if (loc && nostalgiaCityShort) loc.textContent = nostalgiaCityShort;
+  }
+
+  // The retro clock, pinned to the forecast location's timezone like
+  // every other time on this page (the TV's own clock may be UTC).
+  // 24-hour, matching the rest of the page.
+  function renderNostalgiaClock() {
+    if (!nostalgiaOn) return;
+    const clockEl = nxEl('nx-clock');
+    const dateEl = nxEl('nx-date');
+    if (!clockEl || !dateEl) return;
+    try {
+      const now = new Date();
+      const tz = locationTimeZone || undefined;
+      clockEl.textContent = now.toLocaleTimeString('en-GB', { timeZone: tz, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).formatToParts(now);
+      const wd = parts.find(p => p.type === 'weekday').value.toUpperCase();
+      const mo = parts.find(p => p.type === 'month').value.toUpperCase();
+      const dy = parts.find(p => p.type === 'day').value;
+      dateEl.textContent = `${wd} ${mo} ${dy}`;
+    } catch (e) { /* clock keeps its last value */ }
+  }
+
+  function nostalgiaCompass(deg) {
+    if (deg == null || isNaN(deg)) return '';
+    const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return dirs[Math.round(deg / 22.5) % 16];
+  }
+
+  // Flat two-color icons in the old broadcast style, picked from the
+  // condition words. Sun or moon depends on day or night.
+  function nostalgiaIcon(text, isDay) {
+    const t = (text || '').toLowerCase();
+    const sunG = '<g><circle cx="28" cy="26" r="12" fill="#ffd23c"/><g stroke="#ffd23c" stroke-width="4" stroke-linecap="round"><line x1="28" y1="4" x2="28" y2="10"/><line x1="28" y1="42" x2="28" y2="48"/><line x1="6" y1="26" x2="12" y2="26"/><line x1="44" y1="26" x2="50" y2="26"/><line x1="12" y1="10" x2="17" y2="15"/><line x1="39" y1="37" x2="44" y2="42"/><line x1="44" y1="10" x2="39" y2="15"/><line x1="17" y1="37" x2="12" y2="42"/></g></g>';
+    const moonG = '<path d="M44 6a24 24 0 1 0 16 38A27 27 0 0 1 44 6z" fill="#f4f3ec"/>';
+    const cloudG = '<g fill="#eaf2ff"><circle cx="24" cy="44" r="10"/><circle cx="40" cy="35" r="14"/><circle cx="53" cy="45" r="9"/><rect x="15" y="43" width="46" height="11" rx="5.5"/></g>';
+    const drops = '<g stroke="#7ec8ff" stroke-width="4" stroke-linecap="round"><line x1="26" y1="58" x2="23" y2="65"/><line x1="38" y1="58" x2="35" y2="65"/><line x1="50" y1="58" x2="47" y2="65"/></g>';
+    const bolt = '<path d="M40 52 L29 65 L37 65 L33 71 L49 59 L41 59 L46 52 Z" fill="#ffe14d"/>';
+    const flakes = '<g fill="#ffffff"><circle cx="26" cy="62" r="3"/><circle cx="38" cy="65" r="3"/><circle cx="50" cy="62" r="3"/></g>';
+    const fogLines = '<g stroke="#cfd8ea" stroke-width="4" stroke-linecap="round"><line x1="18" y1="59" x2="54" y2="59"/><line x1="24" y1="66" x2="60" y2="66"/></g>';
+    let inner;
+    if (/thunder|storm|lightning/.test(t)) inner = cloudG + bolt;
+    else if (/snow|flurr|blizzard|sleet|ice/.test(t)) inner = cloudG + flakes;
+    else if (/rain|shower|drizzle/.test(t)) inner = cloudG + drops;
+    else if (/fog|mist|haze|smoke/.test(t)) inner = cloudG + fogLines;
+    else if (/partly|mostly sunny|mostly clear|mostly cloudy|few clouds|scattered/.test(t)) inner = (isDay ? sunG : moonG) + '<g transform="translate(10,14) scale(0.88)">' + cloudG + '</g>';
+    else if (/cloud|overcast/.test(t)) inner = cloudG;
+    else inner = isDay ? sunG : moonG;
+    const label = (text || '').replace(/"/g, '');
+    return `<svg viewBox="0 0 68 72" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label}">${inner}</svg>`;
+  }
+
+  // Called from fetchAviation with the same observation the aviation
+  // card renders. NWS observations arrive metric (deg C, km/h,
+  // meters, pascals); the retro screen shows Fahrenheit, mph, miles,
+  // and inches of mercury, like the original broadcast screen.
+  function updateNostalgiaConditions(props, station) {
+    if (!props) return;
+    nostalgiaObs = props;
+    nostalgiaStation = station || '';
+    const cToF = c => (c == null || isNaN(c)) ? null : Math.round(c * 1.8 + 32);
+    const set = (id, val) => { const el = nxEl(id); if (el) el.textContent = val; };
+
+    const tempF = cToF(props.temperature?.value);
+    // The degree sign rides in its own span: the Silkscreen pixel font
+    // draws its degree glyph like a plus sign at small sizes, so the
+    // .nx-deg span renders it in a plain font where it reads cleanly.
+    if (tempF != null) { const tEl = nxEl('nx-temp'); if (tEl) tEl.innerHTML = tempF + '<span class="nx-deg">&deg;</span>'; }
+    const desc = props.textDescription || '';
+    if (desc) set('nx-cond', desc);
+
+    // Day or night for the icon, by the hour at the forecast location.
+    let isDay = true;
+    try {
+      const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: locationTimeZone || undefined, hour: 'numeric', hourCycle: 'h23' }).format(new Date()), 10);
+      if (!isNaN(h)) isDay = h >= 6 && h < 20;
+    } catch (e) {}
+    const iconEl = nxEl('nx-icon');
+    if (iconEl && desc) iconEl.innerHTML = nostalgiaIcon(desc, isDay);
+
+    if (props.windSpeed?.value != null) {
+      const mph = Math.round(props.windSpeed.value * 0.621371);
+      if (mph < 3) set('nx-wind', 'Wind: Calm');
+      else {
+        const dir = nostalgiaCompass(props.windDirection?.value);
+        set('nx-wind', 'Wind: ' + (dir ? dir + ' ' : '') + mph + ' mph');
+      }
+    }
+    if (props.relativeHumidity?.value != null) set('nx-hum', Math.round(props.relativeHumidity.value) + '%');
+    const dewF = cToF(props.dewpoint?.value);
+    if (dewF != null) { const dEl = nxEl('nx-dew'); if (dEl) dEl.innerHTML = dewF + '<span class="nx-deg">&deg;</span>'; }
+    if (props.visibility?.value != null) {
+      const miles = props.visibility.value * 0.000621371;
+      set('nx-vis', (miles >= 9.95 ? '10' : miles.toFixed(1)) + ' Mi');
+    }
+    // Some observations carry sea-level pressure instead of station
+    // pressure; either one reads the same on this screen. When the
+    // feed reports neither (KABI's NWS feed currently sends both as
+    // null), the row hides rather than showing a placeholder.
+    const pressurePa = props.barometricPressure?.value ?? props.seaLevelPressure?.value;
+    const presRow = nxEl('nx-row-pres');
+    if (pressurePa != null) {
+      const inHg = (pressurePa * 0.0002953).toFixed(1);
+      set('nx-pres', nostalgiaStation ? `${inHg} (${nostalgiaStation})` : inHg);
+      if (presRow) presRow.style.display = '';
+    } else if (presRow) {
+      presRow.style.display = 'none';
+    }
+    const stEl = nxEl('nx-ticker-station');
+    if (stEl && nostalgiaStation) stEl.textContent = nostalgiaStation;
+    renderNostalgiaObserved();
+    renderNostalgiaChrome();
+  }
+
+  function renderNostalgiaObserved() {
+    const el = nxEl('nx-obs');
+    if (!el || !nostalgiaObs?.timestamp) return;
+    const then = new Date(nostalgiaObs.timestamp).getTime();
+    if (isNaN(then)) return;
+    const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+    el.textContent = mins === 0 ? 'Just Now' : `${mins} Min Ago`;
+  }
+
+  // The bottom crawl: one line per forecast period, old LDL style.
+  // The track holds two copies of the text and scrolls by half its
+  // width, so the loop is seamless; speed scales with text length.
+  function buildNostalgiaTicker() {
+    const a = nxEl('nx-ticker-text');
+    const b = nxEl('nx-ticker-text-2');
+    if (!a || !b) return;
+    let text;
+    if (nostalgiaPeriods.length > 0) {
+      text = nostalgiaPeriods.slice(0, 6).map(p => {
+        const pop = p.probabilityOfPrecipitation?.value;
+        const popTxt = pop == null ? '0' : String(Math.round(pop));
+        return `${(p.name || '').toUpperCase()}: ${p.temperature} DEGREES, ${(p.shortForecast || '').toUpperCase()}, PRECIPITATION ${popTxt} PERCENT.`;
+      }).join('   ');
+    } else {
+      text = 'NORTHBRAND WEATHER' + (nostalgiaCityLabel ? ' FOR ' + nostalgiaCityLabel.toUpperCase() : '');
+    }
+    text += '   ';
+    a.textContent = text;
+    b.textContent = text;
+    const track = a.parentElement;
+    if (track) track.style.animationDuration = Math.max(20, Math.round(text.length * NOSTALGIA.TICKER_SECONDS_PER_CHAR)) + 's';
+  }
+
+  // The Local Forecast screen: the next four periods, retro rows.
+  function renderNostalgiaForecast() {
+    const wrap = nxEl('nx-fc-rows');
+    if (!wrap) return;
+    if (nostalgiaPeriods.length === 0) { wrap.innerHTML = ''; return; }
+    const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    wrap.innerHTML = nostalgiaPeriods.slice(0, 4).map(p => {
+      const pop = p.probabilityOfPrecipitation?.value;
+      const popTxt = (pop != null && pop > 0) ? Math.round(pop) + '%' : '';
+      return `<div class="nx-fc-row"><span class="nx-fc-name">${esc(p.name)}</span><span class="nx-fc-icon">${nostalgiaIcon(p.shortForecast, p.isDaytime)}</span><span class="nx-fc-cond">${esc(p.shortForecast)}</span><span class="nx-fc-pop">${popTxt}</span><span class="nx-fc-temp">${p.temperature}<span class="nx-deg">&deg;</span></span></div>`;
+    }).join('');
+  }
+
+  // Nostalgia Mode controls: top bar button, retro screen Exit
+  // button, and the Esc key.
+  const nostalgiaToggleBtn = nxEl('nostalgia-toggle');
+  if (nostalgiaToggleBtn) nostalgiaToggleBtn.addEventListener('click', () => setNostalgiaMode(!nostalgiaOn));
+  const nostalgiaExitBtn = nxEl('nostalgia-exit');
+  if (nostalgiaExitBtn) nostalgiaExitBtn.addEventListener('click', () => setNostalgiaMode(false));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && nostalgiaOn) setNostalgiaMode(false);
+  });
+
   // Auto-Load & URL Param Parsing Hook
   const urlParams = new URLSearchParams(window.location.search);
   const pKiosk = urlParams.get('kiosk');
@@ -290,6 +554,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (pKiosk === 'true') {
      document.body.classList.add('kiosk-mode');
+  }
+
+  // Nostalgia Mode at load: the address wins over the remembered
+  // choice, so ?nostalgia=off always gets the modern dashboard back
+  // and ?nostalgia=on (the AbleSign address) always starts retro.
+  const pNostalgia = urlParams.get('nostalgia');
+  if (pNostalgia === 'on' || pNostalgia === '1' || pNostalgia === 'true') {
+     setNostalgiaMode(true, false);
+  } else if (pNostalgia !== 'off' && pNostalgia !== '0' && pNostalgia !== 'false') {
+     let rememberedNostalgia = null;
+     try { rememberedNostalgia = localStorage.getItem('nostalgiaMode'); } catch (e) {}
+     if (rememberedNostalgia === 'on') setNostalgiaMode(true, false);
   }
 
   if (pRefresh && refreshSelect) {
@@ -378,6 +654,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // Pin the page timezone to the forecast location before anything
       // renders a time (solar strip, microcast labels, alert times).
       locationTimeZone = pointsData.properties.timeZone || null;
+
+      // Nostalgia Mode labels its screens with the forecast location's
+      // city and state from this same response (e.g. "Abilene, TX").
+      const relLoc = pointsData.properties.relativeLocation?.properties;
+      if (relLoc && relLoc.city) {
+        nostalgiaCityShort = relLoc.city;
+        nostalgiaCityLabel = relLoc.state ? `${relLoc.city}, ${relLoc.state}` : relLoc.city;
+        renderNostalgiaChrome();
+      }
 
       // Invoke Solar Parallel Execution (after the timezone is known, so
       // sunrise and sunset render in the location's zone)
@@ -534,6 +819,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!res.ok) return;
     const data = await res.json();
     const periods = data.properties.periods;
+
+    // Nostalgia Mode reuses these same periods for its bottom crawl and
+    // its Local Forecast screen; it never fetches anything itself.
+    nostalgiaPeriods = periods;
+    buildNostalgiaTicker();
+    renderNostalgiaForecast();
 
     let html = '';
     let hasExtremeHeat = false, hasExtremeCold = false, hasSnowRisk = false, hasLightningRisk = false;
@@ -866,6 +1157,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (footerStation) footerStation.innerText = `Sector ${validStation}`;
 
     if (metarResult) {
+      // Nostalgia Mode's Current Conditions screen reads this same
+      // observation (temperature, dewpoint, humidity, wind, visibility,
+      // pressure, time) instead of making a second request.
+      updateNostalgiaConditions(metarResult.properties, validStation);
       const metarRows = translateMETAR(metarResult.properties);
       if (metarRows.length > 0) renderDataGrid(metarData, metarRows);
       else metarData.innerText = "No valid METAR properties found.";
