@@ -307,23 +307,43 @@ document.addEventListener('DOMContentLoaded', () => {
   //
   // It only READS data the dashboard already fetched: the latest
   // station observation (updateNostalgiaConditions, called from
-  // fetchAviation) and the forecast periods (nostalgiaPeriods, set
-  // in fetchForecastExt). It makes no requests of its own.
+  // fetchAviation), the forecast periods (nostalgiaPeriods, set in
+  // fetchForecastExt), the Area Forecast Discussion text (set in
+  // fetchDiscussion), and the dashboard's own radar map, which is
+  // MOVED into the retro screen while that screen is up and moved
+  // back untouched when it leaves. It makes no requests of its own.
+  //
+  // The screens rotate: Current Conditions, Local Forecast, Local
+  // Radar, Forecast Discussion. A screen joins the rotation only
+  // when its data exists. The discussion is far too long for one
+  // screen (Brandon flagged this when he asked for it), so that
+  // screen auto-scrolls slowly, pauses where it left off when the
+  // rotation moves on, and resumes on its next turn.
   //
   // *** Settings Brandon may want to change ***
-  // SCREEN_SECONDS: seconds each retro screen stays up before the
-  //   swap between Current Conditions and Local Forecast.
+  // SECONDS: how long each screen stays up per visit. The
+  //   discussion gets longer because it scrolls.
+  // DISCUSSION_SCROLL_PX_PER_SEC: discussion scroll speed.
   // TICKER_SECONDS_PER_CHAR: crawl speed; smaller is faster.
   // ============================================================
-  const NOSTALGIA = { SCREEN_SECONDS: 20, TICKER_SECONDS_PER_CHAR: 0.22 };
+  const NOSTALGIA = {
+    SECONDS: { current: 20, forecast: 20, radar: 20, discussion: 45 },
+    DISCUSSION_SCROLL_PX_PER_SEC: 26,
+    TICKER_SECONDS_PER_CHAR: 0.22
+  };
   let nostalgiaOn = false;
   let nostalgiaObs = null;      // latest observation properties (metric, as NWS sends them)
   let nostalgiaStation = '';    // station id for the current observation, e.g. KABI
   let nostalgiaPeriods = [];    // forecast periods, reused for the crawl and forecast screen
   let nostalgiaCityLabel = '';  // "Abilene, TX", from the points response
   let nostalgiaCityShort = '';  // "Abilene"
-  let nostalgiaScreenIdx = 0;   // 0 = Current Conditions, 1 = Local Forecast
+  let nostalgiaDiscussion = ''; // Area Forecast Discussion product text
+  let nostalgiaScreen = 'current'; // name of the screen currently up
   let nostalgiaTimers = [];     // interval ids, all cleared when the mode turns off
+  let nostalgiaAdvanceId = null;   // timeout id for the next screen swap
+  let nostalgiaAfdTimer = null;    // interval id for the discussion scroll
+  let nostalgiaAfdOffset = 0;      // discussion scroll position, kept between visits
+  let nostalgiaAfdHold = 0;        // scroll ticks to wait at the bottom before rewinding
 
   const nxEl = id => document.getElementById(id);
 
@@ -339,34 +359,131 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     nostalgiaTimers.forEach(clearInterval);
     nostalgiaTimers = [];
+    if (nostalgiaAdvanceId) { clearTimeout(nostalgiaAdvanceId); nostalgiaAdvanceId = null; }
+    stopNostalgiaDiscussionScroll();
     if (on) {
-      nostalgiaScreenIdx = 0;
+      nostalgiaScreen = 'current';
       applyNostalgiaScreen();
       renderNostalgiaClock();
       renderNostalgiaObserved();
       // 1s keeps the retro clock honest; 30s refreshes the
-      // "Observed: X Min Ago" line; SCREEN_SECONDS swaps screens.
+      // "Observed: X Min Ago" line; the rotation runs on its own
+      // per-screen timeouts (see scheduleNostalgiaAdvance).
       nostalgiaTimers.push(setInterval(renderNostalgiaClock, 1000));
       nostalgiaTimers.push(setInterval(renderNostalgiaObserved, 30000));
-      nostalgiaTimers.push(setInterval(() => {
-        if (nostalgiaPeriods.length > 0) {
-          nostalgiaScreenIdx = nostalgiaScreenIdx === 0 ? 1 : 0;
-          applyNostalgiaScreen();
-        }
-      }, NOSTALGIA.SCREEN_SECONDS * 1000));
+      scheduleNostalgiaAdvance();
+    } else {
+      // Leaving the mode entirely: the radar map goes home first.
+      restoreNostalgiaRadar();
     }
     updateURLParams();
   }
 
+  // The screens in rotation order, with their panel ids and titles.
+  // A screen is only offered when its data exists (checked in
+  // nostalgiaScreensInRotation below).
+  const NOSTALGIA_SCREENS = {
+    current:    { panel: 'nx-panel-current',    title: 'Current Conditions' },
+    forecast:   { panel: 'nx-panel-forecast',   title: 'Local Forecast' },
+    radar:      { panel: 'nx-panel-radar',      title: 'Local Radar' },
+    discussion: { panel: 'nx-panel-discussion', title: 'Forecast Discussion' }
+  };
+
+  function nostalgiaScreensInRotation() {
+    const list = ['current'];
+    if (nostalgiaPeriods.length > 0) list.push('forecast');
+    list.push('radar');
+    if (nostalgiaDiscussion.trim().length > 40) list.push('discussion');
+    return list;
+  }
+
+  function scheduleNostalgiaAdvance() {
+    if (!nostalgiaOn) return;
+    if (nostalgiaAdvanceId) clearTimeout(nostalgiaAdvanceId);
+    const seconds = NOSTALGIA.SECONDS[nostalgiaScreen] || 20;
+    nostalgiaAdvanceId = setTimeout(() => {
+      const list = nostalgiaScreensInRotation();
+      const idx = list.indexOf(nostalgiaScreen);
+      nostalgiaScreen = list[(idx + 1) % list.length];
+      applyNostalgiaScreen();
+      scheduleNostalgiaAdvance();
+    }, seconds * 1000);
+  }
+
   function applyNostalgiaScreen() {
-    const cur = nxEl('nx-panel-current');
-    const fc = nxEl('nx-panel-forecast');
     const title = nxEl('nx-screen-title');
-    if (!cur || !fc || !title) return;
-    const showForecast = nostalgiaScreenIdx === 1;
-    cur.hidden = showForecast;
-    fc.hidden = !showForecast;
-    title.textContent = showForecast ? 'Local Forecast' : 'Current Conditions';
+    for (const [name, def] of Object.entries(NOSTALGIA_SCREENS)) {
+      const panel = nxEl(def.panel);
+      if (panel) panel.hidden = name !== nostalgiaScreen;
+    }
+    if (title) title.textContent = NOSTALGIA_SCREENS[nostalgiaScreen].title;
+    // The radar map lives in the retro screen only while that
+    // screen is up; every other screen sends it home first.
+    if (nostalgiaScreen === 'radar') moveNostalgiaRadarIn();
+    else restoreNostalgiaRadar();
+    // The discussion scrolls only while its screen is up.
+    if (nostalgiaScreen === 'discussion') startNostalgiaDiscussionScroll();
+    else stopNostalgiaDiscussionScroll();
+  }
+
+  // --- The radar move ---
+  // The dashboard's Leaflet map element is moved into the retro
+  // screen's host div and back. Its home position is remembered the
+  // first time, and Leaflet is told to re-measure after each move
+  // (invalidateSize), which is all a moved Leaflet map needs.
+  let nostalgiaRadarHome = null; // { parent, next } of #radar-map
+  function moveNostalgiaRadarIn() {
+    const host = nxEl('nx-radar-host');
+    const mapEl = document.getElementById('radar-map');
+    if (!host || !mapEl || mapEl.parentElement === host) return;
+    if (!nostalgiaRadarHome) nostalgiaRadarHome = { parent: mapEl.parentElement, next: mapEl.nextSibling };
+    host.appendChild(mapEl);
+    mapEl.classList.add('nx-radar-map');
+    setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+  }
+  function restoreNostalgiaRadar() {
+    const mapEl = document.getElementById('radar-map');
+    if (!mapEl || !nostalgiaRadarHome || mapEl.parentElement === nostalgiaRadarHome.parent) return;
+    nostalgiaRadarHome.parent.insertBefore(mapEl, nostalgiaRadarHome.next);
+    mapEl.classList.remove('nx-radar-map');
+    setTimeout(() => { if (map) map.invalidateSize(); }, 80);
+  }
+
+  // --- The discussion scroll ---
+  // The viewport hides its overflow; the scroll position is kept in
+  // nostalgiaAfdOffset and re-applied on every tick, because a
+  // hidden panel does not reliably keep its own scroll position.
+  // At the bottom it waits a few seconds, then rewinds to the top.
+  function startNostalgiaDiscussionScroll() {
+    stopNostalgiaDiscussionScroll();
+    const vp = nxEl('nx-afd-viewport');
+    if (!vp) return;
+    vp.scrollTop = nostalgiaAfdOffset;
+    const stepPx = Math.max(1, Math.round(NOSTALGIA.DISCUSSION_SCROLL_PX_PER_SEC / 20)); // 20 ticks per second
+    nostalgiaAfdTimer = setInterval(() => {
+      const max = vp.scrollHeight - vp.clientHeight;
+      if (max <= 0) return;
+      if (nostalgiaAfdHold > 0) {
+        nostalgiaAfdHold--;
+        if (nostalgiaAfdHold === 0) { nostalgiaAfdOffset = 0; vp.scrollTop = 0; }
+        return;
+      }
+      nostalgiaAfdOffset = Math.min(max, nostalgiaAfdOffset + stepPx);
+      vp.scrollTop = nostalgiaAfdOffset;
+      if (nostalgiaAfdOffset >= max) nostalgiaAfdHold = 60; // about 3 seconds at the bottom
+    }, 50);
+  }
+  function stopNostalgiaDiscussionScroll() {
+    if (nostalgiaAfdTimer) { clearInterval(nostalgiaAfdTimer); nostalgiaAfdTimer = null; }
+  }
+  function renderNostalgiaDiscussion() {
+    const el = nxEl('nx-afd-text');
+    if (!el) return;
+    el.textContent = nostalgiaDiscussion || 'Discussion not loaded yet.';
+    nostalgiaAfdOffset = 0;
+    nostalgiaAfdHold = 0;
+    const vp = nxEl('nx-afd-viewport');
+    if (vp) vp.scrollTop = 0;
   }
 
   // City labels on the logo box and the conditions panel.
@@ -1186,6 +1303,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const textRes = await fetch(docId);
         const textData = await textRes.json();
         discussionData.innerText = textData.productText.replace(/\n\s*\n/g, '\n\n');
+        // Nostalgia Mode's discussion screen reads this same text.
+        nostalgiaDiscussion = discussionData.innerText;
+        renderNostalgiaDiscussion();
       } else { discussionData.innerText = "No ambient discussion payloads."; }
     } catch (err) { discussionData.innerText = "Discussion parsing failure.\n" + err.message; }
   }
