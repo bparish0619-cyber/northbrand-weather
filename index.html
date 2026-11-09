@@ -212,6 +212,20 @@
       <div class="nx-fc-rows" id="nx-fc-rows"></div>
     </div>
 
+    <!-- Screen 3: Local Radar. Empty host: app.js moves the dashboard's
+         own Leaflet map in here while this screen is up, and moves it
+         back to the dashboard when the rotation moves on. -->
+    <div class="nx-panel" id="nx-panel-radar" hidden>
+      <div class="nx-radar-host" id="nx-radar-host"></div>
+    </div>
+
+    <!-- Screen 4: Area Forecast Discussion. The full NWS text never
+         fits one screen, so the viewport auto-scrolls slowly while
+         this screen is up and resumes where it left off next turn. -->
+    <div class="nx-panel" id="nx-panel-discussion" hidden>
+      <div class="nx-afd-viewport" id="nx-afd-viewport"><div class="nx-afd-text" id="nx-afd-text">Discussion not loaded yet.</div></div>
+    </div>
+
     <!-- Bottom crawl, the old LDL ticker -->
     <div class="nx-ticker">
       <div class="nx-ticker-track"><span id="nx-ticker-text">NORTHBRAND WEATHER</span><span id="nx-ticker-text-2">NORTHBRAND WEATHER</span></div>
