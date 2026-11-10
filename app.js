@@ -527,7 +527,14 @@ document.addEventListener('DOMContentLoaded', () => {
       map.removeLayer(radarLayer);
       nostalgiaRadarWasOn = true;
     }
-    nostalgiaRvLayers = paths.map(p => L.tileLayer(`${host}${p}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0, zIndex: 500 }).addTo(map));
+    // maxNativeZoom matters here: RainViewer's radar tiles stop
+    // at zoom 7, and past that the service returns a "Zoom Level
+    // Not Supported" badge tile instead of radar (Brandon's phone
+    // showed a map full of badges at zoom 8 on 2026-11-09). With
+    // maxNativeZoom set, Leaflet keeps fetching zoom 7 tiles and
+    // scales them up, so the framing can sit at 8 or closer while
+    // the radar itself still renders.
+    nostalgiaRvLayers = paths.map(p => L.tileLayer(`${host}${p}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0, zIndex: 500, maxNativeZoom: 7 }).addTo(map));
     nostalgiaRvIdx = nostalgiaRvLayers.length - 1;
     nostalgiaRvHold = false;
     showNostalgiaRadarFrame();
