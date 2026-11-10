@@ -472,17 +472,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // layers here, that would throw away the tiles already loaded.
   // Honor the zoom from the web address (Brandon, 2026-11-09): the
   // value captured at load, before the app's URL sync could rewrite
-  // it. When the address carries no zoom (a phone opened from a
-  // bare link, where the app itself defaults the map to the whole
-  // country at zoom 4), the radar screen still frames the local
-  // area at RADAR_DEFAULT_ZOOM instead of inheriting that view.
+  // it. One exception, learned from Brandon's phone the same day:
+  // the app itself writes zoom=4 into the address (its whole
+  // country default), so an address zoom of 4 or wider carries no
+  // framing intent and the radar screen frames the local area at
+  // RADAR_DEFAULT_ZOOM instead. An address zoom closer than 4 (the
+  // AbleSign address carries 8) always wins.
   function settleNostalgiaRadarMap(withZoom) {
     if (!map) return;
     const apply = () => {
       if (!map) return;
       map.invalidateSize();
       if (withZoom && nostalgiaScreen === 'radar') {
-        const targetZoom = !isNaN(nostalgiaAddressZoom) ? nostalgiaAddressZoom : NOSTALGIA.RADAR_DEFAULT_ZOOM;
+        const targetZoom = (!isNaN(nostalgiaAddressZoom) && nostalgiaAddressZoom > 4) ? nostalgiaAddressZoom : NOSTALGIA.RADAR_DEFAULT_ZOOM;
         map.setView([currentLat ?? DEFAULT_LOCATION.lat, currentLon ?? DEFAULT_LOCATION.lon], targetZoom, { animate: false });
       }
     };
