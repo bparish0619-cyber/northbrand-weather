@@ -622,6 +622,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // card renders. NWS observations arrive metric (deg C, km/h,
   // meters, pascals); the retro screen shows Fahrenheit, mph, miles,
   // and inches of mercury, like the original broadcast screen.
+  // Sky tint (added 2026-11-10): lean the nostalgia backdrop toward
+  // the conditions and the day outside, the way the real sky reads.
+  // The classic broadcast blue stays the base (the clear-day pair is
+  // a touch brighter, the clear-night pair deeper); storms go
+  // violet-slate, rain steel blue, snow pale steel, fog grey-blue.
+  // CHANGE-ME: the tint pairs live in this table. The gradient and
+  // its 1.4s glide live in styles.css (.nostalgia-screen).
+  function nostalgiaSkyTint(props, isDay) {
+    const screen = document.getElementById('nostalgia-screen');
+    if (!screen) return;
+    // KABI's newest report sometimes arrives with a blank
+    // textDescription (the same gap the headline fallback covers),
+    // so the icon code gets a vote too. With neither, day or night
+    // alone picks the clear pair.
+    const d = ((props && props.textDescription) || '').toLowerCase();
+    const icon = ((props && props.icon) || '').toLowerCase();
+    let top, bottom;
+    if (d.includes('thunder') || icon.includes('tsra')) { top = '#241f3d'; bottom = '#171233'; }
+    else if (d.includes('snow') || d.includes('flurr') || d.includes('ice') || d.includes('sleet') || icon.includes('snow') || icon.includes('sleet')) { top = '#54657e'; bottom = '#37455c'; }
+    else if (d.includes('rain') || d.includes('shower') || d.includes('drizzle') || icon.includes('rain')) { top = '#274268'; bottom = '#16294a'; }
+    else if (d.includes('fog') || d.includes('mist') || d.includes('haze') || d.includes('smoke') || icon.includes('fog')) { top = '#3a4a63'; bottom = '#26334a'; }
+    else if (d.includes('cloud') || d.includes('overcast') || icon.includes('ovc') || icon.includes('bkn') || icon.includes('sct')) {
+      if (isDay) { top = '#2c4a7c'; bottom = '#1b3260'; } else { top = '#16264d'; bottom = '#0c1836'; }
+    }
+    else if (isDay) { top = '#0d3f9e'; bottom = '#082a63'; }
+    else { top = '#081a42'; bottom = '#050f2a'; }
+    screen.style.setProperty('--nx-sky-top', top);
+    screen.style.setProperty('--nx-sky-bottom', bottom);
+  }
+
   function updateNostalgiaConditions(props, station) {
     if (!props) return;
     nostalgiaObs = props;
@@ -630,9 +660,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const set = (id, val) => { const el = nxEl(id); if (el) el.textContent = val; };
 
     const tempF = cToF(props.temperature?.value);
-    // The degree sign rides in its own span: the Silkscreen pixel font
-    // draws its degree glyph like a plus sign at small sizes, so the
-    // .nx-deg span renders it in a plain font where it reads cleanly.
+    // The degree sign rides in its own span: the Press Start 2P pixel
+    // font draws its degree glyph like a plus sign at small sizes, so
+    // the .nx-deg span renders it in a plain font where it reads cleanly.
     if (tempF != null) { const tEl = nxEl('nx-temp'); if (tEl) tEl.innerHTML = tempF + '<span class="nx-deg">&deg;</span>'; }
     const desc = props.textDescription || '';
     if (desc) set('nx-cond', desc);
@@ -645,6 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
     const iconEl = nxEl('nx-icon');
     if (iconEl && desc) iconEl.innerHTML = nostalgiaIcon(desc, isDay);
+    nostalgiaSkyTint(props, isDay);
 
     if (props.windSpeed?.value != null) {
       const mph = Math.round(props.windSpeed.value * 0.621371);
