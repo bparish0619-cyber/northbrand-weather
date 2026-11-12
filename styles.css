@@ -18,6 +18,16 @@
   --danger-bg: rgba(239, 68, 68, 0.15);
   --danger-border: rgba(239, 68, 68, 0.5);
   --warning: #fbbf24;
+  /* Motion tokens (Northbrand DNA section 10, added 2026-11-10).
+     CHANGE-ME: retune motion family-wide from these six values.
+     Defined here for the whole app; the modern dashboard's look does
+     not change, only the Nostalgia overlay's sky transition uses them. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-inout-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --dur-press: 140ms;
+  --dur-small: 180ms;
+  --dur-menu: 220ms;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -876,15 +886,35 @@ input[type="range"] { accent-color: var(--accent); }
 body.nostalgia-mode { overflow: hidden; }
 .nostalgia-screen[hidden] { display: none; }
 
+/* Sky tint (added 2026-11-10): app.js sets --nx-sky-top and
+   --nx-sky-bottom on the screen from the current conditions and
+   whether it is day or night at the forecast location, so the
+   backdrop leans the way the real sky does. The registrations let
+   supporting browsers (Chromium, including AbleSign) glide between
+   tints over 1.4s; everywhere else the vars still apply, the change
+   is simply instant. The default values are the classic broadcast
+   blue, unchanged from before the tint existed. */
+@property --nx-sky-top { syntax: '<color>'; inherits: false; initial-value: #0a2a6b; }
+@property --nx-sky-bottom { syntax: '<color>'; inherits: false; initial-value: #071c4d; }
+
 .nostalgia-screen {
   position: fixed;
   inset: 0;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  font-family: 'Silkscreen', 'Courier New', monospace;
+  /* Pixel face: Press Start 2P since 2026-11-12. Silkscreen's digit 4
+     filled in to a solid block at these viewport-based sizes and was
+     unreadable (Brandon's report); this face's 4 has a wide open
+     counter. It ships a single weight, so the bold requests below
+     resolve to the regular face, which is already heavy. It also runs
+     wider than Silkscreen, so the screen title, clock, stat rows, and
+     forecast rows were sized down in the same pass (see those rules);
+     leave the temperature at full size, it has the room. */
+  font-family: 'Press Start 2P', 'Courier New', monospace;
   color: #ffffff;
-  background: linear-gradient(180deg, #0a2a6b 0%, #071c4d 100%);
+  background: linear-gradient(180deg, var(--nx-sky-top, #0a2a6b) 0%, var(--nx-sky-bottom, #071c4d) 100%);
+  transition: --nx-sky-top 1.4s var(--ease-inout-strong), --nx-sky-bottom 1.4s var(--ease-inout-strong);
   text-shadow: 2px 2px 0 rgba(0, 18, 54, 0.55);
   overflow: hidden;
 }
@@ -905,8 +935,8 @@ body.nostalgia-mode { overflow: hidden; }
   line-height: 1.15;
   min-width: 15vw;
 }
-.nx-logo-name { font-weight: 700; font-size: clamp(0.8rem, 1.6vw, 1.6rem); letter-spacing: 0.04em; }
-.nx-logo-city { font-size: clamp(0.7rem, 1.4vw, 1.3rem); background: rgba(255,255,255,0.16); margin-top: 0.5vh; padding: 0.2vh 0.4vw; border-radius: 3px; }
+.nx-logo-name { font-weight: 700; font-size: clamp(0.8rem, 1.2vw, 1.3rem); letter-spacing: 0.04em; }
+.nx-logo-city { font-size: clamp(0.7rem, 1.1vw, 1.1rem); background: rgba(255,255,255,0.16); margin-top: 0.5vh; padding: 0.2vh 0.4vw; border-radius: 3px; }
 .nx-screen-title {
   flex: 1;
   min-width: 0;
@@ -914,11 +944,11 @@ body.nostalgia-mode { overflow: hidden; }
   align-items: center;
   white-space: nowrap;
   overflow: hidden;
-  font-size: clamp(1.3rem, 3vw, 2.7rem);
+  font-size: clamp(1.05rem, 2.2vw, 2.2rem);
   font-weight: 700;
 }
 .nx-clock-box { flex-shrink: 0; text-align: right; line-height: 1.15; }
-.nx-clock { font-size: clamp(1.3rem, 3.4vw, 3.2rem); font-weight: 700; }
+.nx-clock { font-size: clamp(1.05rem, 2.6vw, 2.6rem); font-weight: 700; }
 .nx-date { font-size: clamp(0.9rem, 2vw, 1.9rem); }
 .nx-exit {
   margin-top: 0.8vh;
@@ -972,7 +1002,7 @@ body.nostalgia-mode { overflow: hidden; }
   align-items: center;
   justify-content: center;
   text-align: center;
-  min-width: 30%;
+  min-width: 36%;
 }
 /* The Current Conditions pieces size off viewport HEIGHT (vh), not
    width: the panel's height is what runs out first on a TV, and the
@@ -982,7 +1012,7 @@ body.nostalgia-mode { overflow: hidden; }
 .nx-cond { font-size: clamp(1.3rem, 5.5vh, 3.4rem); line-height: 1.15; margin-top: 1vh; }
 .nx-icon { margin: 1.5vh 0; }
 .nx-icon svg { height: clamp(70px, 19vh, 180px); width: auto; filter: drop-shadow(3px 3px 0 rgba(0, 18, 54, 0.45)); }
-.nx-wind { font-size: clamp(1.1rem, 4.6vh, 2.8rem); line-height: 1.2; }
+.nx-wind { font-size: clamp(1.05rem, 3.9vh, 2.4rem); line-height: 1.2; }
 
 .nx-cc-right {
   flex: 1;
@@ -996,11 +1026,11 @@ body.nostalgia-mode { overflow: hidden; }
   justify-content: space-between;
   align-items: baseline;
   gap: 3vw;
-  font-size: clamp(1.25rem, 4.8vh, 3rem);
+  font-size: clamp(1.05rem, 3.6vh, 2.4rem);
   line-height: 1.25;
 }
-.nx-row b { font-weight: 700; text-align: right; }
-.nx-row-city { font-size: clamp(1.4rem, 5.6vh, 3.6rem); font-weight: 700; }
+.nx-row b { font-weight: 700; text-align: right; white-space: nowrap; }
+.nx-row-city { font-size: clamp(1.2rem, 4.6vh, 3rem); font-weight: 700; }
 
 .nx-fc-rows { flex: 1; display: flex; flex-direction: column; width: 100%; min-height: 0; }
 /* Each row takes an equal share of the panel height, so four rows
@@ -1013,7 +1043,7 @@ body.nostalgia-mode { overflow: hidden; }
   gap: 3vw;
   padding: 1vh 0;
   border-bottom: 3px dashed rgba(255, 255, 255, 0.3);
-  font-size: clamp(1.15rem, 2.6vw, 2.4rem);
+  font-size: clamp(1rem, 2.1vw, 2rem);
 }
 .nx-fc-row:last-child { border-bottom: none; }
 .nx-fc-name { min-width: 24%; font-weight: 700; }
@@ -1071,6 +1101,23 @@ body.nostalgia-mode { overflow: hidden; }
   .nx-panel { flex-direction: column; gap: 2vh; padding: 3vh 5vw; }
   .nx-cc-right { gap: 1.4vh; }
   .nx-screen-title { display: none; }
+  /* Phone top bar (2026-11-12, with the Press Start 2P swap): the wider
+     face pushed the clock off the right edge at phone widths, so the
+     logo and clock shrink here. The screen title is already hidden. */
+  .nx-logo-name { font-size: 0.6rem; }
+  .nx-logo-city { font-size: 0.55rem; }
+  .nx-clock { font-size: 0.8rem; }
+  .nx-date { font-size: 0.62rem; }
+  /* Phone panel (same swap): the wider face also made the stat rows
+     overflow sideways and pushed them off the bottom of the stacked
+     panel, so the Current Conditions pieces size down here until the
+     whole column fits above the crawl. */
+  .nx-temp { font-size: 13vh; }
+  .nx-cond { font-size: 4.2vh; }
+  .nx-icon svg { height: 13vh; }
+  .nx-wind { font-size: 3.2vh; }
+  .nx-row { font-size: 1.02rem; gap: 4vw; }
+  .nx-row-city { font-size: 1.3rem; }
 }
 
 /* Nostalgia Mode: radar screen (added 2026-11-09,
