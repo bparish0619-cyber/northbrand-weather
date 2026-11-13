@@ -423,18 +423,56 @@ body {
   100% { opacity: 0.5; }
 }
 
-/* Responsive Scaling */
+/* Responsive Scaling (reworked 2026-11-13 at Brandon's direction: the page
+   adapts to phone, tablet, and desktop widths instead of only shrinking
+   the desktop layout. Everything here lives inside max-width queries, so
+   the desktop and kiosk TV renders above 1100px are untouched.
+   CHANGE-ME: breakpoints are 1100px (tablets and down), 768px (small
+   tablets and phones and down), and 560px (portrait phones). */
 @media (max-width: 1100px) {
   .map-container { height: 400px; }
+  /* Tablets: the header control row is wider than a tablet panel, so let
+     it wrap inside the panel instead of clipping the last control, and
+     let the search box flex instead of holding its desktop width. */
+  .nav-controls { flex-wrap: wrap; justify-content: flex-end; }
+  .search-container { flex: 1 1 230px; }
+  #location-input { flex: 1; width: auto; min-width: 0; }
 }
 
 @media (max-width: 768px) {
   .dashboard-wrapper { padding: 12px; }
-  .top-nav { flex-direction: column; gap: 20px; align-items: stretch; }
-  .nav-controls { flex-direction: column; align-items: stretch; }
+  .top-nav { flex-direction: column; gap: 14px; align-items: stretch; padding: 16px; }
+  /* Brand lockup stays on one line at phone widths. */
+  .top-nav h1 { font-size: 1.35rem; white-space: nowrap; }
+  .site-logo { width: 2.5rem; height: 2.5rem; }
+  /* Controls flow into wrapped rows instead of one tall stack: the two
+     clock strips and the search each take a full row, the buttons and
+     the refresh control share rows between them. */
+  .nav-controls { flex-direction: row; flex-wrap: wrap; align-items: stretch; gap: 10px; }
+  .nav-controls .clocks { flex: 1 1 100%; }
+  .nav-controls .glass-button { flex: 1 1 130px; min-height: 44px; }
+  .refresh-control { flex: 1 1 180px; min-height: 44px; }
+  .search-container { flex: 1 1 100%; flex-direction: row; }
   #location-input { width: 100%; }
-  .search-container { flex-direction: row; }
+  /* Radar header may wrap, so the heading never gets squeezed into a
+     narrow column against the opacity controls. */
+  .radar-header { flex-wrap: wrap; gap: 10px 16px; }
+  .map-container { height: 360px; }
   .forecast-layout { grid-template-columns: 1fr 1fr; }
+  /* Aviation data grids: narrower label column so values get the room. */
+  .data-grid { grid-template-columns: 118px 1fr; font-size: 0.95rem; }
+  .discussion-panel { padding: 16px; }
+}
+
+@media (max-width: 560px) {
+  /* Portrait phones: radar controls take their own full row under the
+     heading, with the opacity slider flexing to fill it. */
+  .radar-header { flex-direction: column; align-items: stretch; }
+  .radar-header > div { width: 100%; }
+  #radar-opacity-slider { flex: 1; }
+  .forecast-layout { gap: 10px; }
+  .forecast-card { padding: 16px 10px; }
+  .hourly-card { min-width: 100px; }
 }
 
 /* Large Displays & 4K TVs */
